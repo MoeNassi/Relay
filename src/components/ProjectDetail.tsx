@@ -2,6 +2,7 @@ import type { Project } from '../types';
 import { STAGES, TEAM_LABELS, stageIndex, stageDef } from '../types';
 import { stageDurations, totalElapsed, formatDuration, nextStage } from '../store';
 import { StageBadge, TeamBadge, SlaCell } from './badges';
+import { TopBar } from './TopBar';
 
 interface Props {
   project: Project;
@@ -17,22 +18,38 @@ export function ProjectDetail({ project: p, onBack, onEdit, onDelete, onAdvance 
   const next = nextStage(p);
 
   return (
-    <div className="page">
-      <button className="back" onClick={onBack}>← All projects</button>
-
-      <div className="page-head">
-        <h1>{p.name}</h1>
-        <StageBadge stage={p.stage} />
-        <TeamBadge team={p.team} />
-        <div className="spacer" />
-        {next && (
-          <button className="btn primary" onClick={onAdvance}>
-            Advance → {stageDef(next).shortLabel}
-          </button>
-        )}
-        <button className="btn" onClick={onEdit}>Edit</button>
-        <button className="btn danger" onClick={onDelete}>Delete</button>
-      </div>
+    <>
+      <TopBar
+        crumbs={[
+          { label: 'Relay Workspace' },
+          { label: 'Projects', onClick: onBack },
+          { label: p.name },
+        ]}
+        right={
+          <>
+            {next && (
+              <button className="btn primary sm" onClick={onAdvance}>
+                Advance → {stageDef(next).shortLabel}
+              </button>
+            )}
+            <button className="btn sm" onClick={onEdit}>Edit</button>
+            <button className="btn sm danger" onClick={onDelete}>Delete</button>
+          </>
+        }
+      />
+      <div className="page">
+        <div className="page-title-block">
+          <div className="title-icon">{p.name.charAt(0).toUpperCase()}</div>
+          <h1 className="page-title">{p.name}</h1>
+          <div className="title-meta">
+            <StageBadge stage={p.stage} />
+            <TeamBadge team={p.team} />
+            <span className="meta-text">
+              {p.owner.name}{p.owner.title ? ` · ${p.owner.title}` : ''}
+            </span>
+            {p.dns && <span className="meta-text mono">{p.dns}</span>}
+          </div>
+        </div>
 
       <div className="card">
         <h2>
@@ -127,7 +144,8 @@ export function ProjectDetail({ project: p, onBack, onEdit, onDelete, onAdvance 
           <div className="empty">No flow rules declared.</div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { loadProjects, saveProjects, advanceStage, nextStage } from './store';
 import { DEV_MODE } from './config';
 import { Landing } from './components/Landing';
 import { Sidebar, type Filter } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
 import { PanelIcon } from './components/icons';
 import { ProjectsTable } from './components/ProjectsTable';
 import { ProjectForm } from './components/ProjectForm';
@@ -106,16 +107,28 @@ export default function App() {
             }}
           />
         ) : (
-          <div className="page">
-            <div className="page-head">
-              <h1>Projects</h1>
-              <div className="spacer" />
-              <button className="btn primary" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
-                + New project
-              </button>
+          <>
+            <TopBar
+              crumbs={[{ label: 'Relay Workspace' }, { label: 'Projects' }]}
+              right={
+                <button className="btn primary sm" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
+                  + New project
+                </button>
+              }
+            />
+            <div className="page">
+              <div className="page-title-block">
+                <h1 className="page-title">Projects</h1>
+                <div className="title-meta">
+                  <span className="meta-text">
+                    {visible.length} project{visible.length === 1 ? '' : 's'}
+                    {filter !== 'all' || search ? ' (filtered)' : ''}
+                  </span>
+                </div>
+              </div>
+              <ProjectsTable projects={visible} onOpen={p => setOpenId(p.id)} />
             </div>
-            <ProjectsTable projects={visible} onOpen={p => setOpenId(p.id)} />
-          </div>
+          </>
         )}
       </main>
 
