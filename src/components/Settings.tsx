@@ -31,7 +31,7 @@ export function Settings({ presence, onBack }: Props) {
   };
 
   const revoke = (k: ApiKeyInfo) => {
-    if (!confirm(`Revoke “${k.name}”? Agents using it will lose access immediately.`)) return;
+    if (!confirm(`Revoke and delete “${k.name}”? Agents using it lose access immediately.`)) return;
     apiRevokeKey(k.id).then(refresh).catch(e => setError(String(e.message ?? e)));
   };
 
@@ -94,11 +94,11 @@ export function Settings({ presence, onBack }: Props) {
           <h2>Active keys</h2>
           <table className="table">
             <thead>
-              <tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr>
+              <tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr>
             </thead>
             <tbody>
               {keys.map(k => (
-                <tr key={k.id} className={k.revoked ? 'key-revoked' : ''} style={{ cursor: 'default' }}>
+                <tr key={k.id} style={{ cursor: 'default' }}>
                   <td className="name">
                     {k.name}
                     {k.internal && <span className="sub"> (used by this web app)</span>}
@@ -106,13 +106,8 @@ export function Settings({ presence, onBack }: Props) {
                   <td className="mono">{k.prefix}</td>
                   <td className="sub">{fmt(k.createdAt)}</td>
                   <td className="sub">{fmt(k.lastUsedAt)}</td>
-                  <td>
-                    {k.revoked
-                      ? <span className="badge b-new">revoked</span>
-                      : <span className="badge b-live"><span className="dot" />active</span>}
-                  </td>
                   <td style={{ textAlign: 'right' }}>
-                    {!k.revoked && !k.internal && (
+                    {!k.internal && (
                       <button className="btn sm danger" onClick={() => revoke(k)}>Revoke</button>
                     )}
                   </td>
@@ -128,7 +123,7 @@ export function Settings({ presence, onBack }: Props) {
   -H "X-API-Key: <your key>" -H 'Content-Type: application/json' \\
   -d '{ "stage": "scan" }'`}</pre>
           <div className="sub" style={{ marginTop: 8 }}>
-            Full endpoint reference in <code>API.md</code>. Revoked keys are refused instantly; “last used” updates on every authenticated call.
+            Full endpoint reference in <code>API.md</code>. Revoking deletes the key — it is refused instantly and removed from this list; “last used” updates on every authenticated call.
           </div>
         </div>
       </div>
