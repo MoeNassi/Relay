@@ -76,19 +76,6 @@ export const SunIcon = ({ size = 17 }: IconProps) => (
   </svg>
 );
 
-export const ChevronDownIcon = ({ size = 12 }: IconProps) => (
-  <svg {...base(size)}>
-    <polyline points="5 9 12 16 19 9" />
-  </svg>
-);
-
-export const ComposeIcon = ({ size = 17 }: IconProps) => (
-  <svg {...base(size)}>
-    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
-    <path d="M17.3 3.7a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 8.3-8.3z" />
-  </svg>
-);
-
 export const ChevronIcon = ({ size = 13, open = true }: IconProps & { open?: boolean }) => (
   <svg {...base(size)} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
     <polyline points="9 5 16 12 9 19" />

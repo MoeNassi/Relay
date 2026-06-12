@@ -3,8 +3,8 @@ import type { Project, Team } from '../types';
 import { STAGES, TEAM_LABELS } from '../types';
 import { DEV_MODE } from '../config';
 import {
-  PanelIcon, SearchIcon, LayersIcon, ServerIcon, ShieldIcon,
-  MoonIcon, SunIcon, ChevronIcon, ChevronDownIcon, ComposeIcon,
+  PanelIcon, SearchIcon, PlusIcon, LayersIcon, ServerIcon, ShieldIcon,
+  UserIcon, MoonIcon, SunIcon, ChevronIcon,
 } from './icons';
 
 export type Filter = 'all' | (typeof STAGES)[number]['key'] | `team:${Team}`;
@@ -46,19 +46,17 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
+      <div className="sidebar-top">
+        <button className="icon-btn" title="Collapse sidebar" onClick={onCollapse}>
+          <PanelIcon />
+        </button>
+      </div>
+
       <div className="workspace">
         <span className="logo">R</span>
         <span className="ws-name">Relay Workspace</span>
-        <span className="ws-caret"><ChevronDownIcon /></span>
         {DEV_MODE && <span className="dev-chip">DEV</span>}
-        <span className="ws-actions">
-          <button className="icon-btn" title="Collapse sidebar" onClick={onCollapse}>
-            <PanelIcon />
-          </button>
-          <button className="icon-btn" title="New project" onClick={onNewProject}>
-            <ComposeIcon />
-          </button>
-        </span>
+        <span className="ws-avatar" title="Signed in (dev)"><UserIcon /></span>
       </div>
 
       <div className="search-row">
@@ -68,6 +66,9 @@ export function Sidebar({
           value={search}
           onChange={e => onSearch(e.target.value)}
         />
+        <button className="icon-btn boxed" title="New project" onClick={onNewProject}>
+          <PlusIcon />
+        </button>
       </div>
 
       <nav className="nav">
