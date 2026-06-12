@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Source+Code+Pro:wght@400;600&display=swap');
+
+:root {
+  --r-font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --r-mono: 'Source Code Pro', ui-monospace, monospace;
+
+  /* AFFiNE-derived light palette */
+  --r-brand: #1e96eb;
+  --r-brand-hover: #1379c4;
+  --r-brand-soft: rgba(30, 150, 235, 0.1);
+  --r-bg: #ffffff;
+  --r-bg-secondary: #fafafa;
+  --r-bg-hover: rgba(0, 0, 0, 0.04);
+  --r-text: #121212;
+  --r-text-secondary: #8e8d91;
+  --r-border: #e3e2e4;
+  --r-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --r-shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.1), 0 16px 48px rgba(0, 0, 0, 0.1);
+
+  --r-green: #10ab70;
+  --r-green-soft: rgba(16, 171, 112, 0.12);
+  --r-amber: #d8a000;
+  --r-amber-soft: rgba(216, 160, 0, 0.13);
+  --r-red: #eb4335;
+  --r-red-soft: rgba(235, 67, 53, 0.1);
+  --r-violet: #8054ff;
+  --r-violet-soft: rgba(128, 84, 255, 0.11);
+
+  --r-radius: 8px;
+  --r-radius-lg: 12px;
+}
+
+[data-theme='dark'] {
+  --r-brand: #1e96eb;
+  --r-brand-hover: #5ab5f1;
+  --r-brand-soft: rgba(30, 150, 235, 0.16);
+  --r-bg: #141414;
+  --r-bg-secondary: #1c1c1c;
+  --r-bg-hover: rgba(255, 255, 255, 0.06);
+  --r-text: #eaeaea;
+  --r-text-secondary: #8e8d91;
+  --r-border: #2e2e2e;
+  --r-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --r-shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.5), 0 16px 48px rgba(0, 0, 0, 0.45);
+
+  --r-green-soft: rgba(16, 171, 112, 0.18);
+  --r-amber-soft: rgba(216, 160, 0, 0.18);
+  --r-red-soft: rgba(235, 67, 53, 0.16);
+  --r-violet-soft: rgba(128, 84, 255, 0.18);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--r-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--r-text);
+  background: var(--r-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+::selection { background: var(--r-brand-soft); }
