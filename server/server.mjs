@@ -5,7 +5,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { installAuthRoutes, currentUser, SSO_ENABLED } from './auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, 'data');
@@ -30,8 +29,7 @@ const newSecret = () => 'relay_sk_' + crypto.randomBytes(24).toString('base64url
 
 let keys;
 try {
-  // revoked keys are deleted outright; drop any left over from older versions
-  keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8')).filter(k => !k.revoked);
+  keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
 } catch {
   keys = [];
   // migrate the old single-key file if present
@@ -149,18 +147,7 @@ function persist() {
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// SSO endpoints (/auth/login, /auth/callback, /auth/me, /auth/logout). When SSO
-// isn't configured, dev mode lets the browser straight in as a local dev user.
-installAuthRoutes(app, {
-  devFallback: DEV_MODE && !SSO_ENABLED,
-  devUser: { name: 'Local Dev', email: '', oid: 'dev' },
-});
-
-// Accept EITHER an SSO session (browser users) OR an API key (agents/CI).
 function requireKey(req, res, next) {
-  const user = currentUser(req);
-  if (user) { req.user = user; return next(); }
-
   const got = req.headers['x-api-key'] ?? (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   const match = keys.find(k => k.key === got && !k.revoked);
   if (!match) return res.status(401).json({ error: 'invalid or missing API key' });
@@ -170,17 +157,15 @@ function requireKey(req, res, next) {
   next();
 }
 
-app.get('/api/projects', requireKey, (_req, res) => res.json(projects));
+app.get('/api/projects', (_req, res) => res.json(projects));
 
-app.get('/api/projects/:id', requireKey, (req, res) => {
+app.get('/api/projects/:id', (req, res) => {
   const p = projects.find(x => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'not found' });
   res.json(p);
 });
 
-// Dev convenience only: hand the browser its key so it can call the API without
-// a login. Disabled once SSO is configured — browsers authenticate by session.
-if (DEV_MODE && !SSO_ENABLED) {
+if (DEV_MODE) {
   app.get('/api/key', (_req, res) => res.json({ key: uiKey.key, devMode: true }));
 }
 
@@ -205,12 +190,12 @@ app.post('/api/keys', requireKey, (req, res) => {
 });
 
 app.delete('/api/keys/:id', requireKey, (req, res) => {
-  const i = keys.findIndex(x => x.id === req.params.id);
-  if (i < 0) return res.status(404).json({ error: 'not found' });
-  if (keys[i].internal) return res.status(400).json({ error: 'the Web UI key cannot be revoked' });
-  keys.splice(i, 1);
+  const k = keys.find(x => x.id === req.params.id);
+  if (!k) return res.status(404).json({ error: 'not found' });
+  if (k.internal) return res.status(400).json({ error: 'the Web UI key cannot be revoked' });
+  k.revoked = true;
   persistKeys();
-  res.status(204).end();
+  res.json(publicKeyInfo(k));
 });
 
 app.post('/api/projects', requireKey, (req, res) => {
@@ -278,7 +263,7 @@ app.delete('/api/projects/:id', requireKey, (req, res) => {
 const dist = path.join(__dirname, '..', 'dist');
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
-  app.get(/^(?!\/api|\/ws|\/auth).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  app.get(/^(?!\/api|\/ws).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
 
 /* ---------- websocket: presence + live updates ---------- */
@@ -301,16 +286,8 @@ function broadcast(msg) {
 const broadcastPresence = () => broadcast({ type: 'presence', users: presenceList() });
 const broadcastProjects = () => broadcast({ type: 'projects', projects });
 
-wss.on('connection', (ws, req) => {
-  // When SSO is on, the live channel (which streams every project) is for
-  // authenticated browser sessions only — reject anonymous sockets.
-  const user = SSO_ENABLED ? currentUser(req) : null;
-  if (SSO_ENABLED && !user) {
-    ws.close(1008, 'authentication required');
-    return;
-  }
-
-  clients.set(ws, { id: uid(), name: user?.name || 'Guest' });
+wss.on('connection', ws => {
+  clients.set(ws, { id: uid(), name: 'Guest' });
   ws.send(JSON.stringify({ type: 'projects', projects }));
   broadcastPresence();
 

@@ -8,9 +8,8 @@ All write operations require an API key, sent as `X-API-Key: <key>` or `Authoriz
 
 Keys are managed in **Settings → API keys** in the web UI: create one named key per
 agent/integration, copy the secret at creation time (it is shown only once), and revoke
-it there when the agent is retired. Revoking deletes the key: it is refused immediately
-and disappears from the list. "Last used" updates on every authenticated call. The key
-store lives in `server/data/api-keys.json`.
+it there when the agent is retired. Revocation takes effect immediately; "last used"
+updates on every authenticated call. The key store lives in `server/data/api-keys.json`.
 
 In dev mode (`RELAY_DEV` unset), `GET /api/key` returns the web UI's own session key —
 that's how the browser app authenticates itself. Disable in production (`RELAY_DEV=0`)

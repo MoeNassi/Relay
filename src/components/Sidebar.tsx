@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Project, Team } from '../types';
 import { STAGES, TEAM_LABELS } from '../types';
+import { DEV_MODE } from '../config';
 import {
   PanelIcon, SearchIcon, PlusIcon, LayersIcon, ServerIcon, ShieldIcon,
   UserIcon, MoonIcon, SunIcon, ChevronIcon, GearIcon,
@@ -20,9 +21,6 @@ interface Props {
   onSettings: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  userName: string;
-  devMode: boolean;
-  onSignOut: () => void;
 }
 
 const SECTIONS_KEY = 'relay-sidebar-sections';
@@ -37,7 +35,7 @@ function loadSections(): Record<string, boolean> {
 
 export function Sidebar({
   projects, filter, onFilter, search, onSearch, onNewProject, onCollapse,
-  settingsOpen, onSettings, theme, onToggleTheme, userName, devMode, onSignOut,
+  settingsOpen, onSettings, theme, onToggleTheme,
 }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>(loadSections);
   const isOpen = (k: string) => open[k] ?? true;
@@ -60,8 +58,8 @@ export function Sidebar({
       <div className="workspace">
         <span className="logo">R</span>
         <span className="ws-name">Relay Workspace</span>
-        {devMode && <span className="dev-chip">DEV</span>}
-        <span className="ws-avatar" title={`Signed in as ${userName}`}><UserIcon /></span>
+        {DEV_MODE && <span className="dev-chip">DEV</span>}
+        <span className="ws-avatar" title="Signed in (dev)"><UserIcon /></span>
       </div>
 
       <div className="search-row">
@@ -130,11 +128,6 @@ export function Sidebar({
           <span className="nav-ico">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</span>
           {theme === 'light' ? 'Dark mode' : 'Light mode'}
         </button>
-        <div className="sidebar-account">
-          <span className="nav-ico"><UserIcon /></span>
-          <span className="account-name" title={userName}>{userName}</span>
-          <button className="signout-btn" title="Sign out" onClick={onSignOut}>Sign out</button>
-        </div>
       </div>
     </aside>
   );

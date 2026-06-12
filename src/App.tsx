@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Project } from './types';
 import {
   connectRelay, apiCreate, apiReplace, apiSetStatus, apiDelete,
-  nextStage, fetchMe, login, logout, type PresenceUser, type AuthState,
+  nextStage, type PresenceUser,
 } from './store';
+import { DEV_MODE } from './config';
 import { Landing } from './components/Landing';
 import { Sidebar, type Filter } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -18,7 +19,7 @@ import './app.css';
 
 type Theme = 'light' | 'dark';
 
-function guestName(): string {
+function userName(): string {
   let name = localStorage.getItem('relay-user');
   if (!name) {
     name = `Guest ${Math.floor(Math.random() * 90 + 10)}`;
@@ -28,8 +29,7 @@ function guestName(): string {
 }
 
 export default function App() {
-  const [auth, setAuth] = useState<AuthState | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [signedIn, setSignedIn] = useState(DEV_MODE);
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<PresenceUser[]>([]);
   const [connected, setConnected] = useState(false);
@@ -58,24 +58,12 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // Resolve the SSO session (or dev fallback) before showing anything.
-  useEffect(() => {
-    let cancelled = false;
-    fetchMe().then(a => { if (!cancelled) { setAuth(a); setAuthLoading(false); } });
-    return () => { cancelled = true; };
-  }, []);
-
-  // live link to the server: project list + who's online — only once signed in,
-  // tagged with the authenticated user's name (falls back to a guest handle).
-  useEffect(() => {
-    if (!auth) return;
-    const name = auth.mode === 'sso' ? auth.user.name : guestName();
-    return connectRelay(name, {
-      onProjects: setProjects,
-      onPresence: setUsers,
-      onStatus: setConnected,
-    });
-  }, [auth]);
+  // live link to the server: project list + who's online
+  useEffect(() => connectRelay(userName(), {
+    onProjects: setProjects,
+    onPresence: setUsers,
+    onStatus: setConnected,
+  }), []);
 
   const setSidebar = (v: boolean) => {
     setSidebarOpen(v);
@@ -102,8 +90,7 @@ export default function App() {
 
   const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
 
-  if (authLoading) return <div className="landing" />;
-  if (!auth) return <Landing onSignIn={login} />;
+  if (!signedIn) return <Landing onSignIn={() => setSignedIn(true)} />;
 
   const presence = <Presence users={users} connected={connected} />;
 
@@ -122,9 +109,6 @@ export default function App() {
           onSettings={() => { setSettingsOpen(true); setOpenId(null); }}
           theme={theme}
           onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
-          userName={auth.mode === 'sso' ? auth.user.name : guestName()}
-          devMode={auth.mode === 'dev'}
-          onSignOut={logout}
         />
       ) : (
         <button className="icon-btn expand" title="Expand sidebar" onClick={() => setSidebar(true)}>
