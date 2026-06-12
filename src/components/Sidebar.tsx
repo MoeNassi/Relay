@@ -4,7 +4,7 @@ import { STAGES, TEAM_LABELS } from '../types';
 import { DEV_MODE } from '../config';
 import {
   PanelIcon, SearchIcon, PlusIcon, LayersIcon, ServerIcon, ShieldIcon,
-  UserIcon, MoonIcon, SunIcon, ChevronIcon,
+  UserIcon, MoonIcon, SunIcon, ChevronIcon, GearIcon,
 } from './icons';
 
 export type Filter = 'all' | (typeof STAGES)[number]['key'] | `team:${Team}`;
@@ -17,6 +17,8 @@ interface Props {
   onSearch: (q: string) => void;
   onNewProject: () => void;
   onCollapse: () => void;
+  settingsOpen: boolean;
+  onSettings: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }
@@ -32,7 +34,8 @@ function loadSections(): Record<string, boolean> {
 }
 
 export function Sidebar({
-  projects, filter, onFilter, search, onSearch, onNewProject, onCollapse, theme, onToggleTheme,
+  projects, filter, onFilter, search, onSearch, onNewProject, onCollapse,
+  settingsOpen, onSettings, theme, onToggleTheme,
 }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>(loadSections);
   const isOpen = (k: string) => open[k] ?? true;
@@ -117,6 +120,10 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
+        <button className={`nav-item ${settingsOpen ? 'active' : ''}`} onClick={onSettings}>
+          <span className="nav-ico"><GearIcon /></span>
+          Settings
+        </button>
         <button className="nav-item" onClick={onToggleTheme}>
           <span className="nav-ico">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</span>
           {theme === 'light' ? 'Dark mode' : 'Light mode'}

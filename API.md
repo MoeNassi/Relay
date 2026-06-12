@@ -4,16 +4,24 @@ Base URL: `http://localhost:5181` (or through the Vite dev server at `http://loc
 
 ## Authentication
 
-All write operations require the API key, sent as `X-API-Key: <key>` or `Authorization: Bearer <key>`.
-The key is generated on first server start and stored in `server/data/api-key`.
+All write operations require an API key, sent as `X-API-Key: <key>` or `Authorization: Bearer <key>`.
 
-```bash
-KEY=$(cat server/data/api-key)
-```
+Keys are managed in **Settings → API keys** in the web UI: create one named key per
+agent/integration, copy the secret at creation time (it is shown only once), and revoke
+it there when the agent is retired. Revocation takes effect immediately; "last used"
+updates on every authenticated call. The key store lives in `server/data/api-keys.json`.
 
-In dev mode (`RELAY_DEV` unset), `GET /api/key` returns the key — that's how the
-browser app authenticates itself. Disable in production (`RELAY_DEV=0`) and put
-the UI behind SSO.
+In dev mode (`RELAY_DEV` unset), `GET /api/key` returns the web UI's own session key —
+that's how the browser app authenticates itself. Disable in production (`RELAY_DEV=0`)
+and put the UI behind SSO.
+
+Key management endpoints (require any active key):
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/keys` | list keys (masked) |
+| POST | `/api/keys` | create — body `{ "name": "scan-bot" }`, returns the secret once |
+| DELETE | `/api/keys/:id` | revoke |
 
 ## Endpoints
 

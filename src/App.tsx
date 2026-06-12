@@ -12,6 +12,7 @@ import { Presence } from './components/Presence';
 import { ProjectsTable } from './components/ProjectsTable';
 import { ProjectForm } from './components/ProjectForm';
 import { ProjectDetail } from './components/ProjectDetail';
+import { Settings } from './components/Settings';
 import { PanelIcon } from './components/icons';
 import './theme.css';
 import './app.css';
@@ -35,6 +36,7 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Project | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -98,11 +100,13 @@ export default function App() {
         <Sidebar
           projects={projects}
           filter={filter}
-          onFilter={f => { setFilter(f); setOpenId(null); }}
+          onFilter={f => { setFilter(f); setOpenId(null); setSettingsOpen(false); }}
           search={search}
-          onSearch={q => { setSearch(q); setOpenId(null); }}
+          onSearch={q => { setSearch(q); setOpenId(null); setSettingsOpen(false); }}
           onNewProject={() => { setEditing(undefined); setFormOpen(true); }}
           onCollapse={() => setSidebar(false)}
+          settingsOpen={settingsOpen}
+          onSettings={() => { setSettingsOpen(true); setOpenId(null); }}
           theme={theme}
           onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
         />
@@ -112,7 +116,9 @@ export default function App() {
         </button>
       )}
       <main className="main">
-        {open ? (
+        {settingsOpen ? (
+          <Settings presence={presence} onBack={() => setSettingsOpen(false)} />
+        ) : open ? (
           <ProjectDetail
             project={open}
             presence={presence}

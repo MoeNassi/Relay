@@ -23,16 +23,58 @@ const uid = () => crypto.randomBytes(4).toString('hex');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-/* ---------- API key ---------- */
-let apiKey = process.env.RELAY_API_KEY;
-if (!apiKey) {
+/* ---------- API keys (managed via Settings UI) ---------- */
+const KEYS_FILE = path.join(DATA_DIR, 'api-keys.json');
+const newSecret = () => 'relay_sk_' + crypto.randomBytes(24).toString('base64url');
+
+let keys;
+try {
+  keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+} catch {
+  keys = [];
+  // migrate the old single-key file if present
   if (fs.existsSync(KEY_FILE)) {
-    apiKey = fs.readFileSync(KEY_FILE, 'utf8').trim();
-  } else {
-    apiKey = 'relay_sk_' + crypto.randomBytes(24).toString('base64url');
-    fs.writeFileSync(KEY_FILE, apiKey + '\n', { mode: 0o600 });
+    keys.push({
+      id: uid(),
+      name: 'Default agent key',
+      key: fs.readFileSync(KEY_FILE, 'utf8').trim(),
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
+      revoked: false,
+    });
   }
 }
+
+function persistKeys() {
+  fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), { mode: 0o600 });
+}
+
+// the browser app's own key, handed out by GET /api/key in dev mode
+let uiKey = keys.find(k => k.internal && !k.revoked);
+if (!uiKey) {
+  uiKey = {
+    id: uid(),
+    name: 'Web UI (dev session)',
+    key: newSecret(),
+    createdAt: new Date().toISOString(),
+    lastUsedAt: null,
+    revoked: false,
+    internal: true,
+  };
+  keys.push(uiKey);
+}
+persistKeys();
+
+const maskKey = k => k.key.slice(0, 12) + '…' + k.key.slice(-4);
+const publicKeyInfo = k => ({
+  id: k.id,
+  name: k.name,
+  prefix: maskKey(k),
+  createdAt: k.createdAt,
+  lastUsedAt: k.lastUsedAt,
+  revoked: !!k.revoked,
+  internal: !!k.internal,
+});
 
 /* ---------- store ---------- */
 function seed() {
@@ -107,7 +149,11 @@ app.use(express.json({ limit: '1mb' }));
 
 function requireKey(req, res, next) {
   const got = req.headers['x-api-key'] ?? (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
-  if (got !== apiKey) return res.status(401).json({ error: 'invalid or missing API key' });
+  const match = keys.find(k => k.key === got && !k.revoked);
+  if (!match) return res.status(401).json({ error: 'invalid or missing API key' });
+  match.lastUsedAt = new Date().toISOString();
+  persistKeys();
+  req.keyInfo = match;
   next();
 }
 
@@ -120,8 +166,37 @@ app.get('/api/projects/:id', (req, res) => {
 });
 
 if (DEV_MODE) {
-  app.get('/api/key', (_req, res) => res.json({ key: apiKey, devMode: true }));
+  app.get('/api/key', (_req, res) => res.json({ key: uiKey.key, devMode: true }));
 }
+
+/* ---------- key management ---------- */
+app.get('/api/keys', requireKey, (_req, res) => res.json(keys.map(publicKeyInfo)));
+
+app.post('/api/keys', requireKey, (req, res) => {
+  const name = String(req.body?.name ?? '').trim();
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const k = {
+    id: uid(),
+    name: name.slice(0, 60),
+    key: newSecret(),
+    createdAt: new Date().toISOString(),
+    lastUsedAt: null,
+    revoked: false,
+  };
+  keys.push(k);
+  persistKeys();
+  // the secret is returned ONCE, at creation
+  res.status(201).json({ ...publicKeyInfo(k), key: k.key });
+});
+
+app.delete('/api/keys/:id', requireKey, (req, res) => {
+  const k = keys.find(x => x.id === req.params.id);
+  if (!k) return res.status(404).json({ error: 'not found' });
+  if (k.internal) return res.status(400).json({ error: 'the Web UI key cannot be revoked' });
+  k.revoked = true;
+  persistKeys();
+  res.json(publicKeyInfo(k));
+});
 
 app.post('/api/projects', requireKey, (req, res) => {
   const b = req.body ?? {};
@@ -234,5 +309,5 @@ wss.on('connection', ws => {
 
 server.listen(PORT, () => {
   console.log(`Relay server on http://localhost:${PORT}`);
-  console.log(`API key (also in server/data/api-key): ${apiKey}`);
+  console.log(`${keys.filter(k => !k.revoked).length} active API key(s) — manage them in Settings or server/data/api-keys.json`);
 });

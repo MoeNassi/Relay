@@ -39,6 +39,24 @@ export const apiSetStatus = (id: string, stage: StageKey, team?: string) =>
   call<Project>('PATCH', `/api/projects/${id}/status`, { stage, team });
 export const apiDelete = (id: string) => call<void>('DELETE', `/api/projects/${id}`);
 
+/* ---------- API key management ---------- */
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revoked: boolean;
+  internal: boolean;
+}
+
+export const apiListKeys = () => call<ApiKeyInfo[]>('GET', '/api/keys');
+/** The full secret is only present in this response — show it once. */
+export const apiCreateKey = (name: string) =>
+  call<ApiKeyInfo & { key: string }>('POST', '/api/keys', { name });
+export const apiRevokeKey = (id: string) => call<ApiKeyInfo>('DELETE', `/api/keys/${id}`);
+
 /* ---------- websocket: projects + presence ---------- */
 
 export interface PresenceUser {

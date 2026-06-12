@@ -465,6 +465,53 @@
   padding: 48px 0;
 }
 
+/* ---------- settings / api keys ---------- */
+.key-create { display: flex; gap: 12px; align-items: flex-end; }
+
+.key-reveal {
+  margin-top: 14px;
+  border: 1px solid var(--r-green);
+  background: var(--r-green-soft);
+  border-radius: var(--r-radius);
+  padding: 12px 14px;
+  animation: fadeUp 0.3s ease both;
+}
+.key-reveal-head { font-size: 13px; font-weight: 600; color: var(--r-green); margin-bottom: 8px; }
+.key-reveal-row { display: flex; align-items: center; gap: 10px; }
+.key-reveal-row code {
+  flex: 1;
+  background: var(--r-bg);
+  border: 1px solid var(--r-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.key-revoked td { opacity: 0.5; }
+.key-revoked .name { text-decoration: line-through; }
+
+.key-error {
+  border: 1px solid var(--r-red);
+  background: var(--r-red-soft);
+  color: var(--r-red);
+  border-radius: var(--r-radius);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.key-usage {
+  margin: 0;
+  background: var(--r-bg-secondary);
+  border: 1px solid var(--r-border);
+  border-radius: var(--r-radius);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* ---------- animations ---------- */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
