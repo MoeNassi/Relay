@@ -1,93 +1,91 @@
-import type { Project, StageKey, Team, HistoryEntry } from './types';
+import type { Project, StageKey } from './types';
 import { STAGES, stageIndex, stageDef } from './types';
-
-const KEY = 'relay-projects';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-function seed(): Project[] {
-  const h = (days: number) => new Date(Date.now() - days * 86400_000).toISOString();
-  return [
-    {
-      id: uid(),
-      name: 'Cartographie Apps',
-      dns: 'cartographie.um6p.ma',
-      owner: { name: 'C. Ibnsina', title: 'IT Project Manager' },
-      environments: [
-        {
-          id: uid(),
-          name: 'prod',
-          vms: [
-            { id: uid(), role: 'app server', count: 2, vcpu: 4, ramGb: 8, diskGb: 80, os: 'Ubuntu 24.04' },
-            { id: uid(), role: 'db', count: 1, vcpu: 4, ramGb: 16, diskGb: 200, os: 'Ubuntu 24.04' },
-          ],
-        },
-        {
-          id: uid(),
-          name: 'dev',
-          vms: [{ id: uid(), role: 'all-in-one', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' }],
-        },
-      ],
-      flows: [
-        { id: uid(), source: 'app server', destination: 'db', port: '5432', protocol: 'TCP', direction: 'outbound', note: 'PostgreSQL' },
-        { id: uid(), source: 'app server', destination: 'smtp.um6p.ma', port: '587', protocol: 'TCP', direction: 'outbound', note: 'Mail relay' },
-      ],
-      stage: 'scan',
-      team: 'cybersec',
-      history: [
-        { stage: 'new', team: 'owner', enteredAt: h(14) },
-        { stage: 'vms', team: 'infra', enteredAt: h(12) },
-        { stage: 'scan', team: 'cybersec', enteredAt: h(4) },
-      ],
-      createdAt: h(14),
-    },
-    {
-      id: uid(),
-      name: 'HR Portal',
-      dns: 'hr.um6p.ma',
-      owner: { name: 'S. Alaoui', title: 'HR Director' },
-      environments: [
-        {
-          id: uid(),
-          name: 'prod',
-          vms: [{ id: uid(), role: 'app server', count: 1, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }],
-        },
-      ],
-      flows: [
-        { id: uid(), source: 'app server', destination: 'ad.um6p.ma', port: '636', protocol: 'TCP', direction: 'outbound', note: 'LDAPS' },
-      ],
-      stage: 'vms',
-      team: 'infra',
-      history: [
-        { stage: 'new', team: 'owner', enteredAt: h(9) },
-        { stage: 'vms', team: 'infra', enteredAt: h(7) },
-      ],
-      createdAt: h(9),
-    },
-  ];
+/* ---------- API client (server is the source of truth) ---------- */
+
+let apiKey: string | null = null;
+
+// Dev only: the server hands the browser its key. In production the UI
+// would authenticate via SSO session instead.
+async function ensureKey(): Promise<string> {
+  if (apiKey) return apiKey;
+  const res = await fetch('/api/key');
+  if (!res.ok) throw new Error('API key endpoint unavailable (server down?)');
+  apiKey = (await res.json()).key;
+  return apiKey!;
 }
 
-export function loadProjects(): Project[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* corrupted -> reseed */
+async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': await ensureKey(),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `${method} ${url}: ${res.status}`);
   }
-  const s = seed();
-  localStorage.setItem(KEY, JSON.stringify(s));
-  return s;
+  return res.status === 204 ? (undefined as T) : res.json();
 }
 
-export function saveProjects(projects: Project[]) {
-  localStorage.setItem(KEY, JSON.stringify(projects));
+export const apiCreate = (p: Project) => call<Project>('POST', '/api/projects', p);
+export const apiReplace = (p: Project) => call<Project>('PUT', `/api/projects/${p.id}`, p);
+export const apiSetStatus = (id: string, stage: StageKey, team?: string) =>
+  call<Project>('PATCH', `/api/projects/${id}/status`, { stage, team });
+export const apiDelete = (id: string) => call<void>('DELETE', `/api/projects/${id}`);
+
+/* ---------- websocket: projects + presence ---------- */
+
+export interface PresenceUser {
+  id: string;
+  name: string;
 }
 
-export function advanceStage(p: Project, to: StageKey, team?: Team): Project {
-  const t = team ?? stageDef(to).defaultTeam;
-  const entry: HistoryEntry = { stage: to, team: t, enteredAt: new Date().toISOString() };
-  return { ...p, stage: to, team: t, history: [...p.history, entry] };
+interface RelayEvents {
+  onProjects: (projects: Project[]) => void;
+  onPresence: (users: PresenceUser[]) => void;
+  onStatus: (connected: boolean) => void;
 }
+
+export function connectRelay(userName: string, events: RelayEvents): () => void {
+  let ws: WebSocket | null = null;
+  let closed = false;
+  let retry: ReturnType<typeof setTimeout>;
+
+  const open = () => {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => {
+      events.onStatus(true);
+      ws?.send(JSON.stringify({ type: 'hello', name: userName }));
+    };
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'projects') events.onProjects(msg.projects);
+        if (msg.type === 'presence') events.onPresence(msg.users);
+      } catch { /* ignore malformed frames */ }
+    };
+    ws.onclose = () => {
+      events.onStatus(false);
+      if (!closed) retry = setTimeout(open, 2000);
+    };
+  };
+  open();
+
+  return () => {
+    closed = true;
+    clearTimeout(retry);
+    ws?.close();
+  };
+}
+
+/* ---------- SLA / duration math (pure) ---------- */
 
 /** Time spent in each visited stage, in ms. Current stage counts up to now. */
 export function stageDurations(p: Project): Partial<Record<StageKey, number>> {

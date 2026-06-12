@@ -1,22 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Project } from './types';
-import { loadProjects, saveProjects, advanceStage, nextStage } from './store';
+import {
+  connectRelay, apiCreate, apiReplace, apiSetStatus, apiDelete,
+  nextStage, type PresenceUser,
+} from './store';
 import { DEV_MODE } from './config';
 import { Landing } from './components/Landing';
 import { Sidebar, type Filter } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { PanelIcon } from './components/icons';
+import { Presence } from './components/Presence';
 import { ProjectsTable } from './components/ProjectsTable';
 import { ProjectForm } from './components/ProjectForm';
 import { ProjectDetail } from './components/ProjectDetail';
+import { PanelIcon } from './components/icons';
 import './theme.css';
 import './app.css';
 
 type Theme = 'light' | 'dark';
 
+function userName(): string {
+  let name = localStorage.getItem('relay-user');
+  if (!name) {
+    name = `Guest ${Math.floor(Math.random() * 90 + 10)}`;
+    localStorage.setItem('relay-user', name);
+  }
+  return name;
+}
+
 export default function App() {
   const [signedIn, setSignedIn] = useState(DEV_MODE);
-  const [projects, setProjects] = useState<Project[]>(loadProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<PresenceUser[]>([]);
+  const [connected, setConnected] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -41,10 +56,12 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  const update = (next: Project[]) => {
-    setProjects(next);
-    saveProjects(next);
-  };
+  // live link to the server: project list + who's online
+  useEffect(() => connectRelay(userName(), {
+    onProjects: setProjects,
+    onPresence: setUsers,
+    onStatus: setConnected,
+  }), []);
 
   const setSidebar = (v: boolean) => {
     setSidebarOpen(v);
@@ -66,9 +83,14 @@ export default function App() {
     }
     return list;
   }, [projects, filter, search]);
+
   const open = projects.find(p => p.id === openId) ?? null;
 
+  const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
+
   if (!signedIn) return <Landing onSignIn={() => setSignedIn(true)} />;
+
+  const presence = <Presence users={users} connected={connected} />;
 
   return (
     <div className="shell">
@@ -93,17 +115,17 @@ export default function App() {
         {open ? (
           <ProjectDetail
             project={open}
+            presence={presence}
             onBack={() => setOpenId(null)}
             onEdit={() => { setEditing(open); setFormOpen(true); }}
             onDelete={() => {
               if (confirm(`Delete project “${open.name}”?`)) {
-                update(projects.filter(p => p.id !== open.id));
-                setOpenId(null);
+                apiDelete(open.id).then(() => setOpenId(null)).catch(fail);
               }
             }}
             onAdvance={() => {
               const to = nextStage(open);
-              if (to) update(projects.map(p => (p.id === open.id ? advanceStage(p, to) : p)));
+              if (to) apiSetStatus(open.id, to).catch(fail);
             }}
           />
         ) : (
@@ -111,9 +133,12 @@ export default function App() {
             <TopBar
               crumbs={[{ label: 'Relay Workspace' }, { label: 'Projects' }]}
               right={
-                <button className="btn primary sm" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
-                  + New project
-                </button>
+                <>
+                  {presence}
+                  <button className="btn primary sm" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
+                    + New project
+                  </button>
+                </>
               }
             />
             <div className="page">
@@ -137,9 +162,8 @@ export default function App() {
           initial={editing}
           onClose={() => setFormOpen(false)}
           onSave={p => {
-            update(editing ? projects.map(x => (x.id === p.id ? p : x)) : [...projects, p]);
-            setFormOpen(false);
-            setOpenId(p.id);
+            const req = editing ? apiReplace(p) : apiCreate(p);
+            req.then(saved => { setFormOpen(false); setOpenId(saved.id); }).catch(fail);
           }}
         />
       )}

@@ -6,13 +6,14 @@ import { TopBar } from './TopBar';
 
 interface Props {
   project: Project;
+  presence?: React.ReactNode;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAdvance: () => void;
 }
 
-export function ProjectDetail({ project: p, onBack, onEdit, onDelete, onAdvance }: Props) {
+export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, onAdvance }: Props) {
   const durations = stageDurations(p);
   const curIdx = stageIndex(p.stage);
   const next = nextStage(p);
@@ -27,6 +28,7 @@ export function ProjectDetail({ project: p, onBack, onEdit, onDelete, onAdvance 
         ]}
         right={
           <>
+            {presence}
             {next && (
               <button className="btn primary sm" onClick={onAdvance}>
                 Advance → {stageDef(next).shortLabel}
