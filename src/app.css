@@ -11,8 +11,6 @@
   padding: 10px 12px 12px;
 }
 
-.sidebar-top { display: flex; margin-bottom: 6px; }
-
 .icon-btn {
   display: grid;
   place-items: center;
@@ -40,13 +38,30 @@
 .workspace {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 5px 8px;
   border-radius: var(--r-radius);
   font-weight: 600;
   font-size: 14px;
+  cursor: pointer;
 }
 .workspace:hover { background: var(--r-bg-hover); }
+
+.ws-caret {
+  display: grid;
+  place-items: center;
+  color: var(--r-text-secondary);
+  flex-shrink: 0;
+}
+
+.ws-actions {
+  margin-left: auto;
+  display: none;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.workspace:hover .ws-actions, .ws-actions:focus-within { display: flex; }
+.ws-actions .icon-btn { width: 26px; height: 26px; }
 
 .workspace .logo {
   width: 22px; height: 22px;
@@ -61,17 +76,6 @@
 }
 
 .ws-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.ws-avatar {
-  margin-left: auto;
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  background: var(--r-bg-hover);
-  color: var(--r-text-secondary);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
 
 .dev-chip {
   font-size: 9px;
