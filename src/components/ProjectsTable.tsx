@@ -9,7 +9,16 @@ interface Props {
 
 export function ProjectsTable({ projects, onOpen }: Props) {
   if (!projects.length) {
-    return <div className="empty">No projects here yet — create one with “New project”.</div>;
+    return (
+      <div className="empty">
+        <div className="baton-track">
+          <span className="runner a" />
+          <span className="baton" />
+          <span className="runner b" />
+        </div>
+        No projects here yet — create one with “New project”.
+      </div>
+    );
   }
   return (
     <table className="table">

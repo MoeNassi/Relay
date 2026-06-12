@@ -93,7 +93,7 @@ export default function App() {
   const presence = <Presence users={users} connected={connected} />;
 
   return (
-    <div className="shell">
+    <div className={`shell ${sidebarOpen ? '' : 'no-sidebar'}`}>
       {sidebarOpen ? (
         <Sidebar
           projects={projects}

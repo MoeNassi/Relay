@@ -33,9 +33,11 @@
 .icon-btn.boxed:hover { background: var(--r-border); }
 .icon-btn.expand {
   position: fixed;
-  top: 12px; left: 12px;
-  z-index: 10;
+  top: 8px; left: 12px;
+  z-index: 30; /* above the sticky topbar (20) */
 }
+/* keep breadcrumbs clear of the floating expand button */
+.no-sidebar .topbar { padding-left: 52px; }
 
 .workspace {
   display: flex;
@@ -461,6 +463,106 @@
   text-align: center;
   color: var(--r-text-secondary);
   padding: 48px 0;
+}
+
+/* ---------- animations ---------- */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.4); }
+  70% { transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50% { box-shadow: 0 0 0 3px transparent; opacity: 0.55; }
+}
+@keyframes stripes {
+  to { background-position: 24px 0; }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+/* staggered entrances */
+.table tbody tr { animation: fadeUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.table tbody tr:nth-child(1) { animation-delay: 0.03s; }
+.table tbody tr:nth-child(2) { animation-delay: 0.07s; }
+.table tbody tr:nth-child(3) { animation-delay: 0.11s; }
+.table tbody tr:nth-child(4) { animation-delay: 0.15s; }
+.table tbody tr:nth-child(5) { animation-delay: 0.19s; }
+.table tbody tr:nth-child(n+6) { animation-delay: 0.23s; }
+
+.page > .card, .page .detail-grid > .card { animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.page > .card:nth-of-type(2) { animation-delay: 0.06s; }
+.page > .card:nth-of-type(3) { animation-delay: 0.12s; }
+.page > .card:nth-of-type(n+4) { animation-delay: 0.18s; }
+.detail-grid > .card:nth-child(2) { animation-delay: 0.06s; }
+
+.page-title-block { animation: fadeUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* presence avatars pop in */
+.presence-avatar { animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* live indicators breathe */
+.badge .dot { animation: pulseDot 2.2s ease-in-out infinite; }
+.nav-item.active .stage-dot { animation: pulseDot 2.2s ease-in-out infinite; }
+
+/* current pipeline stage: marching stripes */
+.step.current .bar {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--r-brand) 0 6px,
+    color-mix(in srgb, var(--r-brand) 55%, transparent) 6px 12px
+  );
+  background-size: 24px 4px;
+  animation: stripes 0.9s linear infinite;
+}
+
+/* micro-interactions */
+.btn, .icon-btn, .nav-item { transition: background 0.15s ease, transform 0.1s ease; }
+.btn:active, .icon-btn:active { transform: scale(0.96); }
+.table tbody tr:hover .name { color: var(--r-brand); transition: color 0.15s ease; }
+.title-icon { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.title-icon:hover { transform: scale(1.08) rotate(-4deg); }
+.sso-card .logo { animation: floaty 3.5s ease-in-out infinite; }
+
+/* ---------- baton-pass sprite (empty state) ---------- */
+.baton-track {
+  position: relative;
+  width: 150px;
+  height: 34px;
+  margin: 0 auto 14px;
+}
+.runner {
+  position: absolute;
+  top: 50%;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.runner.a { left: 0; background: var(--r-brand-soft); border: 2px solid var(--r-brand); }
+.runner.b { right: 0; background: var(--r-violet-soft); border: 2px solid var(--r-violet); }
+.baton {
+  position: absolute;
+  top: 50%;
+  left: 24px;
+  width: 26px; height: 7px;
+  border-radius: 4px;
+  background: var(--r-amber);
+  animation: batonPass 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes batonPass {
+  0% { transform: translate(0, -50%) rotate(0deg); }
+  50% { transform: translate(38px, -130%) rotate(180deg); }
+  100% { transform: translate(76px, -50%) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
 /* ---------- detail ---------- */
