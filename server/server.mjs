@@ -274,11 +274,18 @@ app.delete('/api/projects/:id', requireKey, (req, res) => {
   res.status(204).end();
 });
 
-// serve the built app in production
+// Serve the built app ONLY in production. In dev, Vite (port 5180) serves the UI
+// with hot-reload, so this server stays backend-only — it must NOT serve a stale
+// dist/ build. Set NODE_ENV=production (e.g. via `npm start`) to enable this.
+const PROD = process.env.NODE_ENV === 'production';
 const dist = path.join(__dirname, '..', 'dist');
-if (fs.existsSync(dist)) {
+if (PROD && fs.existsSync(dist)) {
   app.use(express.static(dist));
   app.get(/^(?!\/api|\/ws|\/auth).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+} else {
+  // dev: make it obvious this port is the API, not the app
+  app.get('/', (_req, res) =>
+    res.type('text/plain').send('Relay API server (dev). The UI runs on http://localhost:5180'));
 }
 
 /* ---------- websocket: presence + live updates ---------- */

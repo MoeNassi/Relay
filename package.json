@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server/server.mjs",
-    "start": "npm run build && node server/server.mjs"
+    "start": "npm run build && NODE_ENV=production node server/server.mjs"
   },
   "dependencies": {
     "express": "^5.2.1",
