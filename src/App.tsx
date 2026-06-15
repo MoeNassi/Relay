@@ -71,7 +71,7 @@ export default function App() {
 
   // Boot splash: minimum on-screen time so the animation registers, then fade out.
   useEffect(() => {
-    const t = setTimeout(() => setMinSplash(false), 2000);
+    const t = setTimeout(() => setMinSplash(false), 2600);
     return () => clearTimeout(t);
   }, []);
   const booting = authLoading || minSplash;

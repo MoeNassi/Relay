@@ -542,50 +542,56 @@
   border-radius: 3px;
   background: var(--r-brand);
   transform: scaleX(0);
-  transform-origin: left center;
-  opacity: 0;
+  transform-origin: left center; /* draw L→R; erase shrinks the right edge back L-ward */
+  opacity: 1;
 }
-.note-line.l1 { top: 6px;  width: 100%; animation: write1 1.8s ease-in-out infinite; }
-.note-line.l2 { top: 28px; width: 78%;  background: var(--r-violet); animation: write2 1.8s ease-in-out infinite; }
-.note-line.l3 { top: 50px; width: 56%;  background: var(--r-amber);  animation: write3 1.8s ease-in-out infinite; }
+.note-line.l1 { top: 6px;  width: 100%; animation: write1 2.4s linear infinite; }
+.note-line.l2 { top: 28px; width: 78%;  background: var(--r-violet); animation: write2 2.4s linear infinite; }
+.note-line.l3 { top: 50px; width: 56%;  background: var(--r-amber);  animation: write3 2.4s linear infinite; }
 
-/* draw (scaleX) on the way in, then clear (fade) all together near the end */
+/* Each line: draw (scaleX 0→1), hold, then the flipped pencil wipes it (1→0),
+   same left origin so the erase is a smooth retract, not a fade. Erased
+   bottom-up (l3 → l2 → l1) to follow the pencil from where it finished writing. */
 @keyframes write1 {
-  0% { transform: scaleX(0); opacity: 1; }
-  17% { transform: scaleX(1); opacity: 1; }
-  72% { transform: scaleX(1); opacity: 1; }
-  82%, 100% { transform: scaleX(1); opacity: 0; }
+  0% { transform: scaleX(0); }
+  12% { transform: scaleX(1); }
+  72% { transform: scaleX(1); }
+  84%, 100% { transform: scaleX(0); }
 }
 @keyframes write2 {
-  0%, 17% { transform: scaleX(0); opacity: 1; }
-  34% { transform: scaleX(1); opacity: 1; }
-  72% { transform: scaleX(1); opacity: 1; }
-  84%, 100% { transform: scaleX(1); opacity: 0; }
+  0%, 12% { transform: scaleX(0); }
+  24% { transform: scaleX(1); }
+  58% { transform: scaleX(1); }
+  70%, 100% { transform: scaleX(0); }
 }
 @keyframes write3 {
-  0%, 34% { transform: scaleX(0); opacity: 1; }
-  51% { transform: scaleX(1); opacity: 1; }
-  72% { transform: scaleX(1); opacity: 1; }
-  86%, 100% { transform: scaleX(1); opacity: 0; }
+  0%, 24% { transform: scaleX(0); }
+  36% { transform: scaleX(1); }
+  44% { transform: scaleX(1); }
+  56%, 100% { transform: scaleX(0); }
 }
 
 .pencil {
   position: absolute;
   top: -14px; left: -10px;
   font-size: 22px;
-  animation: pencilMove 1.8s ease-in-out infinite;
+  animation: pencilMove 2.4s ease-in-out infinite;
 }
-/* follow each line as it's written, then lift and rest during the clear */
+/* write each line L→R (tip down), flip 180° (eraser down), wipe each line R→L */
 @keyframes pencilMove {
-  0%   { transform: translate(0, 0) rotate(8deg); }
-  17%  { transform: translate(160px, 0) rotate(8deg); }
-  18%  { transform: translate(0, 22px) rotate(8deg); }
-  34%  { transform: translate(125px, 22px) rotate(8deg); }
-  35%  { transform: translate(0, 44px) rotate(8deg); }
-  51%  { transform: translate(90px, 44px) rotate(8deg); }
-  60%  { transform: translate(150px, -8px) rotate(-12deg); }
-  72%  { transform: translate(150px, -8px) rotate(-12deg); }
-  86%, 100% { transform: translate(0, 0) rotate(8deg); }
+  0%   { transform: translate(0, 0) rotate(10deg); }
+  12%  { transform: translate(160px, 0) rotate(10deg); }
+  13%  { transform: translate(0, 22px) rotate(10deg); }
+  24%  { transform: translate(130px, 22px) rotate(10deg); }
+  25%  { transform: translate(0, 44px) rotate(10deg); }
+  36%  { transform: translate(88px, 44px) rotate(10deg); }
+  44%  { transform: translate(88px, 44px) rotate(190deg); }  /* flip in place */
+  56%  { transform: translate(0, 44px) rotate(190deg); }      /* erase l3 R→L */
+  58%  { transform: translate(130px, 22px) rotate(190deg); }  /* lift to l2 */
+  70%  { transform: translate(0, 22px) rotate(190deg); }      /* erase l2 R→L */
+  72%  { transform: translate(160px, 0) rotate(190deg); }     /* lift to l1 */
+  84%  { transform: translate(0, 0) rotate(190deg); }         /* erase l1 R→L */
+  92%, 100% { transform: translate(0, 0) rotate(10deg); }     /* flip back, ready */
 }
 
 /* ---------- environment switcher ---------- */
