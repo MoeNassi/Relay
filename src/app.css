@@ -496,6 +496,98 @@
   padding: 48px 0;
 }
 
+/* ---------- boot splash ---------- */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, var(--r-brand-soft), transparent),
+    var(--r-bg);
+  transition: opacity 0.45s ease;
+}
+.splash.leaving { opacity: 0; pointer-events: none; }
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.splash-word {
+  margin-top: 26px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.splash-tag {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--r-text-secondary);
+}
+
+/* ---- pencil writing notes, then clearing them ---- */
+.notepad {
+  position: relative;
+  width: 170px;
+  height: 64px;
+  margin: 0 auto;
+}
+.note-line {
+  position: absolute;
+  left: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--r-brand);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+}
+.note-line.l1 { top: 6px;  width: 100%; animation: write1 1.8s ease-in-out infinite; }
+.note-line.l2 { top: 28px; width: 78%;  background: var(--r-violet); animation: write2 1.8s ease-in-out infinite; }
+.note-line.l3 { top: 50px; width: 56%;  background: var(--r-amber);  animation: write3 1.8s ease-in-out infinite; }
+
+/* draw (scaleX) on the way in, then clear (fade) all together near the end */
+@keyframes write1 {
+  0% { transform: scaleX(0); opacity: 1; }
+  17% { transform: scaleX(1); opacity: 1; }
+  72% { transform: scaleX(1); opacity: 1; }
+  82%, 100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes write2 {
+  0%, 17% { transform: scaleX(0); opacity: 1; }
+  34% { transform: scaleX(1); opacity: 1; }
+  72% { transform: scaleX(1); opacity: 1; }
+  84%, 100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes write3 {
+  0%, 34% { transform: scaleX(0); opacity: 1; }
+  51% { transform: scaleX(1); opacity: 1; }
+  72% { transform: scaleX(1); opacity: 1; }
+  86%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+.pencil {
+  position: absolute;
+  top: -14px; left: -10px;
+  font-size: 22px;
+  animation: pencilMove 1.8s ease-in-out infinite;
+}
+/* follow each line as it's written, then lift and rest during the clear */
+@keyframes pencilMove {
+  0%   { transform: translate(0, 0) rotate(8deg); }
+  17%  { transform: translate(160px, 0) rotate(8deg); }
+  18%  { transform: translate(0, 22px) rotate(8deg); }
+  34%  { transform: translate(125px, 22px) rotate(8deg); }
+  35%  { transform: translate(0, 44px) rotate(8deg); }
+  51%  { transform: translate(90px, 44px) rotate(8deg); }
+  60%  { transform: translate(150px, -8px) rotate(-12deg); }
+  72%  { transform: translate(150px, -8px) rotate(-12deg); }
+  86%, 100% { transform: translate(0, 0) rotate(8deg); }
+}
+
 /* ---------- environment switcher ---------- */
 .env-tabs {
   display: flex;

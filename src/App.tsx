@@ -6,6 +6,7 @@ import {
   fetchMe, login, logout, type PresenceUser, type AuthState,
 } from './store';
 import { Landing } from './components/Landing';
+import { Splash } from './components/Splash';
 import { Sidebar, type Filter } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Presence } from './components/Presence';
@@ -31,6 +32,8 @@ function guestName(): string {
 export default function App() {
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [minSplash, setMinSplash] = useState(true);   // keep the boot animation up briefly
+  const [splashGone, setSplashGone] = useState(false); // removed after the fade-out
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<PresenceUser[]>([]);
   const [connected, setConnected] = useState(false);
@@ -65,6 +68,18 @@ export default function App() {
     fetchMe().then(a => { if (!cancelled) { setAuth(a); setAuthLoading(false); } });
     return () => { cancelled = true; };
   }, []);
+
+  // Boot splash: minimum on-screen time so the animation registers, then fade out.
+  useEffect(() => {
+    const t = setTimeout(() => setMinSplash(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
+  const booting = authLoading || minSplash;
+  useEffect(() => {
+    if (booting) return;
+    const t = setTimeout(() => setSplashGone(true), 450); // matches fade-out
+    return () => clearTimeout(t);
+  }, [booting]);
 
   // live link to the server: project list + who's online — only once signed in,
   // tagged with the authenticated user's name (falls back to a guest handle).
@@ -103,12 +118,17 @@ export default function App() {
 
   const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
 
-  if (authLoading) return <div className="landing" />;
-  if (!auth) return <Landing onSignIn={login} />;
+  const splash = splashGone ? null : <Splash leaving={!booting} />;
+
+  // Show the boot animation until auth resolves AND its minimum time elapses.
+  if (authLoading) return <>{splash}</>;
+  if (!auth) return <>{splash}<Landing onSignIn={login} /></>;
 
   const presence = <Presence users={users} connected={connected} />;
 
   return (
+    <>
+    {splash}
     <div className={`shell ${sidebarOpen ? '' : 'no-sidebar'}`}>
       {sidebarOpen ? (
         <Sidebar
@@ -188,5 +208,6 @@ export default function App() {
         />
       )}
     </div>
+    </>
   );
 }
