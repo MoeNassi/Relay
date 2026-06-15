@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 server/data/
 shot.png
+
+# Secrets — never commit real SSO credentials
+.env
+.env.local
+!.env.example
