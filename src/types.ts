@@ -56,6 +56,8 @@ export interface HistoryEntry {
   stage: StageKey;
   team: Team;
   enteredAt: string; // ISO
+  note?: string;     // optional comment captured at the status change
+  by?: string;       // who made the change (user name or agent key name)
 }
 
 export interface Project {

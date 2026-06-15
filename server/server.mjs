@@ -248,18 +248,23 @@ app.put('/api/projects/:id', requireKey, (req, res) => {
   res.json(projects[i]);
 });
 
-// Agents change pipeline status here; history (and thus SLA clocks) updates automatically.
+// Agents change pipeline status here; history (and thus SLA clocks) updates
+// automatically. An optional `note` (comment) is recorded on the history entry.
 app.patch('/api/projects/:id/status', requireKey, (req, res) => {
   const p = projects.find(x => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'not found' });
-  const { stage, team } = req.body ?? {};
+  const { stage, team, note } = req.body ?? {};
   if (!STAGES.includes(stage)) {
     return res.status(400).json({ error: `stage must be one of: ${STAGES.join(', ')}` });
   }
   const t = TEAMS.includes(team) ? team : DEFAULT_TEAM[stage];
+  const by = req.user?.name ?? req.keyInfo?.name ?? null;
+  const entry = { stage, team: t, enteredAt: new Date().toISOString() };
+  if (typeof note === 'string' && note.trim()) entry.note = note.trim().slice(0, 500);
+  if (by) entry.by = by;
   p.stage = stage;
   p.team = t;
-  p.history.push({ stage, team: t, enteredAt: new Date().toISOString() });
+  p.history.push(entry);
   persist();
   broadcastProjects();
   res.json(p);

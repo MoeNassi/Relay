@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Project } from './types';
 import {
   connectRelay, apiCreate, apiReplace, apiSetStatus, apiDelete,
-  nextStage, fetchMe, login, logout, type PresenceUser, type AuthState,
+  fetchMe, login, logout, type PresenceUser, type AuthState,
 } from './store';
 import { Landing } from './components/Landing';
 import { Sidebar, type Filter } from './components/Sidebar';
@@ -145,10 +145,7 @@ export default function App() {
                 apiDelete(open.id).then(() => setOpenId(null)).catch(fail);
               }
             }}
-            onAdvance={() => {
-              const to = nextStage(open);
-              if (to) apiSetStatus(open.id, to).catch(fail);
-            }}
+            onSetStatus={(stage, team, note) => apiSetStatus(open.id, stage, team, note).catch(fail)}
           />
         ) : (
           <>

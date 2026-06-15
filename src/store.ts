@@ -72,8 +72,8 @@ export async function logout(): Promise<void> {
 
 export const apiCreate = (p: Project) => call<Project>('POST', '/api/projects', p);
 export const apiReplace = (p: Project) => call<Project>('PUT', `/api/projects/${p.id}`, p);
-export const apiSetStatus = (id: string, stage: StageKey, team?: string) =>
-  call<Project>('PATCH', `/api/projects/${id}/status`, { stage, team });
+export const apiSetStatus = (id: string, stage: StageKey, team?: string, note?: string) =>
+  call<Project>('PATCH', `/api/projects/${id}/status`, { stage, team, note });
 export const apiDelete = (id: string) => call<void>('DELETE', `/api/projects/${id}`);
 
 /* ---------- API key management ---------- */
@@ -165,10 +165,16 @@ export function totalElapsed(p: Project): number {
 }
 
 export function formatDuration(ms: number): string {
-  const h = Math.floor(ms / 3600_000);
-  if (h < 1) return `${Math.max(1, Math.floor(ms / 60_000))}min`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}min`;
+  const h = Math.floor(m / 60);
   const d = Math.floor(h / 24);
-  if (d < 1) return `${h}h`;
+  if (d < 1) {
+    const rm = m % 60;
+    return rm ? `${h}h ${rm}min` : `${h}h`;
+  }
   const rh = h % 24;
   return rh ? `${d}d ${rh}h` : `${d}d`;
 }
@@ -187,4 +193,43 @@ export function slaStatus(p: Project): { ratio: number; elapsed: number; target:
 export function nextStage(p: Project): StageKey | null {
   const i = stageIndex(p.stage);
   return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1].key : null;
+}
+
+export type StageState = 'done' | 'current' | 'pending';
+
+export interface StageStat {
+  key: StageKey;
+  label: string;
+  shortLabel: string;
+  state: StageState;
+  ms: number | null;    // time spent in the stage (null if not reached yet)
+  slaMs: number | null; // SLA target for the stage
+  ratio: number | null; // ms / slaMs
+  breached: boolean;    // took longer than the SLA target
+}
+
+/**
+ * Per-stage SLA breakdown for the project view: how long each task took, with a
+ * flag when it blew past its SLA target. Stages ahead of the current one are
+ * 'pending' with no time, so a reverted mistaken advance reads clean.
+ */
+export function stageBreakdown(p: Project): StageStat[] {
+  const durations = stageDurations(p);
+  const curIdx = stageIndex(p.stage);
+  return STAGES.map((s, i) => {
+    const state: StageState = i < curIdx ? 'done' : i === curIdx ? 'current' : 'pending';
+    const ms = state === 'pending' ? null : durations[s.key] ?? 0;
+    const slaMs = s.slaHours != null ? s.slaHours * 3600_000 : null;
+    const ratio = ms != null && slaMs != null ? ms / slaMs : null;
+    return {
+      key: s.key,
+      label: s.label,
+      shortLabel: s.shortLabel,
+      state,
+      ms,
+      slaMs,
+      ratio,
+      breached: ratio != null && ratio > 1,
+    };
+  });
 }

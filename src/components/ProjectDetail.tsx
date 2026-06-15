@@ -1,8 +1,10 @@
-import type { Project } from '../types';
-import { STAGES, TEAM_LABELS, stageIndex, stageDef } from '../types';
-import { stageDurations, totalElapsed, formatDuration, nextStage } from '../store';
-import { StageBadge, TeamBadge, SlaCell } from './badges';
+import { useState } from 'react';
+import type { Project, StageKey, Team } from '../types';
+import { TEAM_LABELS, stageDef } from '../types';
+import { stageBreakdown, totalElapsed, formatDuration, slaStatus, nextStage } from '../store';
+import { StageBadge, TeamBadge } from './badges';
 import { TopBar } from './TopBar';
+import { StatusChangeModal } from './StatusChangeModal';
 
 interface Props {
   project: Project;
@@ -10,13 +12,20 @@ interface Props {
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onAdvance: () => void;
+  onSetStatus: (stage: StageKey, team: Team, note: string) => void;
 }
 
-export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, onAdvance }: Props) {
-  const durations = stageDurations(p);
-  const curIdx = stageIndex(p.stage);
+export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, onSetStatus }: Props) {
+  const stages = stageBreakdown(p);
   const next = nextStage(p);
+  const sla = slaStatus(p);
+  const total = totalElapsed(p);
+  const breachedCount = stages.filter(s => s.breached).length;
+
+  // status-change modal: holds the stage to pre-select, or null when closed
+  const [statusStage, setStatusStage] = useState<StageKey | null>(null);
+
+  const slaClass = sla ? (sla.ratio >= 1 ? 'over' : sla.ratio >= 0.7 ? 'warn' : 'ok') : 'ok';
 
   return (
     <>
@@ -30,10 +39,11 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
           <>
             {presence}
             {next && (
-              <button className="btn primary sm" onClick={onAdvance}>
+              <button className="btn primary sm" onClick={() => setStatusStage(next)}>
                 Advance → {stageDef(next).shortLabel}
               </button>
             )}
+            <button className="btn sm" onClick={() => setStatusStage(p.stage)}>Change status</button>
             <button className="btn sm" onClick={onEdit}>Edit</button>
             <button className="btn sm danger" onClick={onDelete}>Delete</button>
           </>
@@ -53,29 +63,53 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
           </div>
         </div>
 
+      {/* ---- SLA hero: the headline numbers ---- */}
+      <div className="sla-hero">
+        <div className="sla-stat">
+          <div className="sla-stat-label">Total elapsed</div>
+          <div className="sla-stat-value">{formatDuration(total)}</div>
+          <div className="sla-stat-sub">{p.stage === 'live' ? 'delivered' : 'in flight'}</div>
+        </div>
+        <div className="sla-stat">
+          <div className="sla-stat-label">Current stage</div>
+          <div className="sla-stat-value">{stageDef(p.stage).shortLabel}</div>
+          <div className={`sla-stat-sub sla ${slaClass}`}>
+            {sla ? `${formatDuration(sla.elapsed)} / ${formatDuration(sla.target)} SLA` : 'no SLA clock'}
+          </div>
+        </div>
+        <div className="sla-stat">
+          <div className="sla-stat-label">SLA breaches</div>
+          <div className={`sla-stat-value ${breachedCount ? 'danger' : 'good'}`}>{breachedCount}</div>
+          <div className="sla-stat-sub">{breachedCount ? 'stage(s) over target' : 'all within target'}</div>
+        </div>
+      </div>
+
+      {/* ---- per-stage breakdown: how long each task took ---- */}
       <div className="card">
-        <h2>
-          Pipeline &amp; SLA
-          <span className="hint">total: {formatDuration(totalElapsed(p))} — current stage: <SlaCell project={p} /></span>
-        </h2>
-        <div className="pipeline">
-          {STAGES.map((s, i) => {
-            const cls = i < curIdx ? 'done' : i === curIdx ? 'current' : '';
-            // Only show time the project has legitimately reached. Stages ahead
-            // of the current one read '—' even if briefly visited by mistake and
-            // then reverted — no leftover time from undone status changes.
-            const d = i <= curIdx ? durations[s.key] : undefined;
-            return (
-              <div className={`step ${cls}`} key={s.key}>
-                <div className="bar" />
-                <div className="s-label">{s.shortLabel}</div>
-                <div className="s-time">
-                  {d != null ? formatDuration(d) : '—'}
-                  {s.slaHours != null && ` / ${formatDuration(s.slaHours * 3600_000)}`}
-                </div>
-              </div>
-            );
-          })}
+        <h2>Time per stage<span className="hint">how long each task took vs its SLA target</span></h2>
+        <div className="stage-rows">
+          {stages.map(s => (
+            <div className={`stage-row ${s.state} ${s.breached ? 'breached' : ''}`} key={s.key}>
+              <span className={`stage-dot d-${s.key}`} />
+              <span className="stage-name">{s.label}</span>
+              {s.state === 'pending' ? (
+                <span className="stage-dur pending">not started</span>
+              ) : (
+                <>
+                  <span className={`stage-dur ${s.breached ? 'over' : s.state === 'current' ? 'current' : 'ok'}`}>
+                    {formatDuration(s.ms ?? 0)}
+                  </span>
+                  <span className="stage-target">
+                    {s.slaMs != null ? `/ ${formatDuration(s.slaMs)} SLA` : 'no SLA'}
+                    {s.state === 'current' && ' · in progress'}
+                  </span>
+                  {s.breached && s.slaMs != null && (
+                    <span className="stage-flag">over by {formatDuration((s.ms ?? 0) - s.slaMs)}</span>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -92,13 +126,24 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         </div>
 
         <div className="card">
-          <h2>History</h2>
-          <dl className="kv">
-            {p.history.map((h, i) => (
-              <FragmentRow key={i} label={stageDef(h.stage).shortLabel}
-                value={`${new Date(h.enteredAt).toLocaleString()} · ${TEAM_LABELS[h.team]}`} />
+          <h2>Activity log<span className="hint">status changes &amp; comments</span></h2>
+          <ol className="activity">
+            {[...p.history].reverse().map((h, i) => (
+              <li className="activity-item" key={p.history.length - i}>
+                <span className={`stage-dot d-${h.stage}`} />
+                <div className="activity-body">
+                  <div className="activity-head">
+                    <strong>{stageDef(h.stage).shortLabel}</strong>
+                    <span className="activity-meta">
+                      {TEAM_LABELS[h.team]}{h.by ? ` · ${h.by}` : ''}
+                    </span>
+                    <span className="activity-time">{new Date(h.enteredAt).toLocaleString()}</span>
+                  </div>
+                  {h.note && <div className="activity-note">“{h.note}”</div>}
+                </div>
+              </li>
             ))}
-          </dl>
+          </ol>
         </div>
       </div>
 
@@ -150,15 +195,15 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         )}
       </div>
       </div>
-    </>
-  );
-}
 
-function FragmentRow({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
+      {statusStage && (
+        <StatusChangeModal
+          project={p}
+          initialStage={statusStage}
+          onClose={() => setStatusStage(null)}
+          onSubmit={(stage, team, note) => { onSetStatus(stage, team, note); setStatusStage(null); }}
+        />
+      )}
     </>
   );
 }

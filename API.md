@@ -58,12 +58,14 @@ curl -s -X POST http://localhost:5181/api/projects \
   }'
 ```
 
-Move it to "Creating VMs" (ball goes to Network & Infra automatically):
+Move it to "Creating VMs" (ball goes to Network & Infra automatically). An
+optional `note` is recorded on the activity log and the `by` field is set to the
+API key's name (or the signed-in user):
 
 ```bash
 curl -s -X PATCH http://localhost:5181/api/projects/<id>/status \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
-  -d '{ "stage": "vms" }'
+  -d '{ "stage": "vms", "note": "VMs provisioned in vCenter, awaiting OS hardening" }'
 ```
 
 Hand the scan stage explicitly to cybersec:

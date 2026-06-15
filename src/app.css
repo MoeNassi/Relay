@@ -493,6 +493,96 @@
   padding: 48px 0;
 }
 
+/* ---------- SLA hero ---------- */
+.sla-hero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.sla-stat {
+  border: 1px solid var(--r-border);
+  border-radius: var(--r-radius-lg);
+  background: var(--r-bg);
+  padding: 16px 18px;
+}
+.sla-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-text-secondary);
+}
+.sla-stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.sla-stat-value.good { color: var(--r-green); }
+.sla-stat-value.danger { color: var(--r-red); }
+.sla-stat-sub { font-size: 12.5px; color: var(--r-text-secondary); }
+.sla-stat-sub.sla.ok { color: var(--r-green); }
+.sla-stat-sub.sla.warn { color: var(--r-amber); }
+.sla-stat-sub.sla.over { color: var(--r-red); font-weight: 600; }
+
+/* ---------- time per stage ---------- */
+.stage-rows { display: flex; flex-direction: column; }
+.stage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--r-border);
+}
+.stage-row:last-child { border-bottom: 0; }
+.stage-row .stage-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.stage-row.pending { opacity: 0.5; }
+.stage-row.current { background: var(--r-brand-soft); border-radius: var(--r-radius); padding-left: 10px; padding-right: 10px; }
+.stage-row.breached { background: var(--r-red-soft); border-radius: var(--r-radius); padding-left: 10px; padding-right: 10px; }
+.stage-name { font-weight: 600; font-size: 14px; min-width: 160px; }
+.stage-dur {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  margin-left: auto;
+}
+.stage-dur.ok { color: var(--r-green); }
+.stage-dur.current { color: var(--r-brand); }
+.stage-dur.over { color: var(--r-red); }
+.stage-dur.pending { font-size: 13px; font-weight: 500; color: var(--r-text-secondary); margin-left: auto; }
+.stage-target { font-size: 12.5px; color: var(--r-text-secondary); min-width: 130px; text-align: right; }
+.stage-flag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--r-red);
+  background: var(--r-bg);
+  border: 1px solid var(--r-red);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* ---------- activity log ---------- */
+.activity { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.activity-item { display: flex; gap: 10px; }
+.activity-item .stage-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.activity-body { flex: 1; min-width: 0; }
+.activity-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.activity-head strong { font-size: 13.5px; }
+.activity-meta { font-size: 12.5px; color: var(--r-text-secondary); }
+.activity-time { font-size: 12px; color: var(--r-text-secondary); margin-left: auto; font-variant-numeric: tabular-nums; }
+.activity-note {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--r-text);
+  border-left: 2px solid var(--r-border);
+  padding-left: 10px;
+  font-style: italic;
+}
+
 /* ---------- settings / api keys ---------- */
 .key-create { display: flex; gap: 12px; align-items: flex-end; }
 
