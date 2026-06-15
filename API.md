@@ -35,13 +35,19 @@ Key management endpoints (require any active key):
 | PATCH | `/api/projects/:id/status` | key | change ONE environment's pipeline status |
 | DELETE | `/api/projects/:id` | key | delete |
 
-Stages: `new` → `vms` → `scan` → `publication` → `live`.
-Teams (ball holder): `infra`, `cybersec`, `owner` — defaults to the stage's usual team if omitted.
-Every status change is appended to `history`, which drives the per-stage SLA clocks in the UI.
+**Each environment runs its own pipeline.** A project has `environments[]`, and
+status changes target one environment by `envId`.
+
+Stages (per environment): `arch` → `vms` → `deploy` → `scan` → `publication` → `live`
+(`deploy` = development/deployment, no SLA clock).
+Teams (ball holder): `infra`, `network`, `cybersec`, `owner` — defaults to the stage's usual team if omitted.
+Promotion order is `dev → preprod → prod` (custom names last); an environment can only
+change status once the previous one is `live` (otherwise `409`). Each change is appended to
+that environment's `history`, driving its per-stage SLA clocks.
 
 ## Examples
 
-Create a project (minimal — `name` and `owner.name` required):
+Create a project with two environments (`name` and `owner.name` required):
 
 ```bash
 curl -s -X POST http://localhost:5181/api/projects \
@@ -50,30 +56,33 @@ curl -s -X POST http://localhost:5181/api/projects \
     "name": "Billing Service",
     "dns": "billing.um6p.ma",
     "owner": { "name": "M. Idrissi", "title": "Finance IT Lead" },
-    "environments": [{ "id": "e1", "name": "prod", "vms": [
-      { "id": "v1", "role": "app server", "count": 2, "vcpu": 4, "ramGb": 8, "diskGb": 80, "os": "Ubuntu 24.04" }
-    ]}],
-    "flows": [{ "id": "f1", "source": "app server", "destination": "db", "port": "5432",
+    "environments": [
+      { "name": "preprod", "vms": [
+        { "role": "app server", "count": 1, "vcpu": 4, "ramGb": 8, "diskGb": 80, "os": "Ubuntu 24.04" } ] },
+      { "name": "prod", "vms": [
+        { "role": "app server", "count": 2, "vcpu": 8, "ramGb": 16, "diskGb": 120, "os": "Ubuntu 24.04" } ] }
+    ],
+    "flows": [{ "source": "app server", "destination": "db", "port": "5432",
                 "protocol": "TCP", "direction": "outbound", "note": "PostgreSQL" }]
   }'
 ```
 
-Move it to "Creating VMs" (ball goes to Network & Infra automatically). An
-optional `note` is recorded on the activity log and the `by` field is set to the
-API key's name (or the signed-in user):
+The response includes each environment's `id`. Move ONE environment to a stage
+(`envId` required). An optional `note` is recorded on the activity log and `by`
+is set to the API key's name (or signed-in user):
 
 ```bash
 curl -s -X PATCH http://localhost:5181/api/projects/<id>/status \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
-  -d '{ "stage": "vms", "note": "VMs provisioned in vCenter, awaiting OS hardening" }'
+  -d '{ "envId": "<envId>", "stage": "vms", "note": "VMs provisioned, awaiting OS hardening" }'
 ```
 
-Hand the scan stage explicitly to cybersec:
+Hand the scan stage of an environment explicitly to cybersec:
 
 ```bash
 curl -s -X PATCH http://localhost:5181/api/projects/<id>/status \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
-  -d '{ "stage": "scan", "team": "cybersec" }'
+  -d '{ "envId": "<envId>", "stage": "scan", "team": "cybersec" }'
 ```
 
 Connected browsers update instantly — changes are broadcast over the WebSocket (`/ws`),
