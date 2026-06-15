@@ -17,8 +17,8 @@ const PORT = process.env.RELAY_PORT ?? 5181;
 const DEV_MODE = process.env.RELAY_DEV !== '0';
 
 const STAGES = ['new', 'vms', 'scan', 'publication', 'live'];
-const TEAMS = ['infra', 'cybersec', 'owner'];
-const DEFAULT_TEAM = { new: 'owner', vms: 'infra', scan: 'cybersec', publication: 'infra', live: 'owner' };
+const TEAMS = ['infra', 'network', 'cybersec', 'owner'];
+const DEFAULT_TEAM = { new: 'owner', vms: 'infra', scan: 'cybersec', publication: 'network', live: 'owner' };
 
 const uid = () => crypto.randomBytes(4).toString('hex');
 

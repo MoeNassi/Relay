@@ -3,7 +3,7 @@ import type { Project, Team } from '../types';
 import { STAGES, TEAM_LABELS } from '../types';
 import {
   PanelIcon, SearchIcon, PlusIcon, LayersIcon, ServerIcon, ShieldIcon,
-  UserIcon, MoonIcon, SunIcon, ChevronIcon, GearIcon,
+  NetworkIcon, UserIcon, MoonIcon, SunIcon, ChevronIcon, GearIcon,
 } from './icons';
 
 export type Filter = 'all' | (typeof STAGES)[number]['key'] | `team:${Team}`;
@@ -47,7 +47,8 @@ export function Sidebar({
     localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
   };
 
-  const teamIcon = (t: Team) => (t === 'cybersec' ? <ShieldIcon /> : <ServerIcon />);
+  const teamIcon = (t: Team) =>
+    t === 'cybersec' ? <ShieldIcon /> : t === 'network' ? <NetworkIcon /> : <ServerIcon />;
 
   return (
     <aside className="sidebar">
@@ -104,7 +105,7 @@ export function Sidebar({
         <button className="section-head" onClick={() => toggle('teams')}>
           Ball at <ChevronIcon open={isOpen('teams')} />
         </button>
-        {isOpen('teams') && (['infra', 'cybersec'] as Team[]).map(t => {
+        {isOpen('teams') && (['infra', 'network', 'cybersec'] as Team[]).map(t => {
           const n = projects.filter(p => p.team === t).length;
           const key: Filter = `team:${t}`;
           return (

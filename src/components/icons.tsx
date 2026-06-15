@@ -56,6 +56,15 @@ export const ShieldIcon = ({ size = 17 }: IconProps) => (
   </svg>
 );
 
+export const NetworkIcon = ({ size = 17 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="9" />
+    <ellipse cx="12" cy="12" rx="4" ry="9" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <path d="M4.5 7.5h15M4.5 16.5h15" />
+  </svg>
+);
+
 export const UserIcon = ({ size = 15 }: IconProps) => (
   <svg {...base(size)}>
     <circle cx="12" cy="8.5" r="3.8" />

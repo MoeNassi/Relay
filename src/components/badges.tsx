@@ -1,7 +1,7 @@
 import type { Project, StageKey, Team } from '../types';
 import { stageDef, TEAM_LABELS } from '../types';
 import { slaStatus, formatDuration } from '../store';
-import { ServerIcon, ShieldIcon, UserIcon } from './icons';
+import { ServerIcon, ShieldIcon, UserIcon, NetworkIcon } from './icons';
 
 export function StageBadge({ stage }: { stage: StageKey }) {
   return (
@@ -14,6 +14,7 @@ export function StageBadge({ stage }: { stage: StageKey }) {
 
 const TEAM_ICONS: Record<Team, React.ReactNode> = {
   infra: <ServerIcon size={13} />,
+  network: <NetworkIcon size={13} />,
   cybersec: <ShieldIcon size={13} />,
   owner: <UserIcon size={13} />,
 };

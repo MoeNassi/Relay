@@ -1,6 +1,6 @@
 export type StageKey = 'new' | 'vms' | 'scan' | 'publication' | 'live';
 
-export type Team = 'infra' | 'cybersec' | 'owner';
+export type Team = 'infra' | 'network' | 'cybersec' | 'owner';
 
 export interface StageDef {
   key: StageKey;
@@ -16,12 +16,13 @@ export const STAGES: StageDef[] = [
   { key: 'new', label: 'New — Scoping & request', shortLabel: 'New', defaultTeam: 'owner', slaHours: 48 },
   { key: 'vms', label: 'Creating VMs', shortLabel: 'VMs', defaultTeam: 'infra', slaHours: 120 },
   { key: 'scan', label: 'Security scan', shortLabel: 'Scan', defaultTeam: 'cybersec', slaHours: 168 },
-  { key: 'publication', label: 'URL publication', shortLabel: 'Publish', defaultTeam: 'infra', slaHours: 48 },
+  { key: 'publication', label: 'URL publication', shortLabel: 'Publish', defaultTeam: 'network', slaHours: 48 },
   { key: 'live', label: 'Live in production', shortLabel: 'Live', defaultTeam: 'owner', slaHours: null },
 ];
 
 export const TEAM_LABELS: Record<Team, string> = {
-  infra: 'Network & Infra',
+  infra: 'Infrastructure',
+  network: 'Network',
   cybersec: 'Cybersecurity',
   owner: 'Project owner',
 };
