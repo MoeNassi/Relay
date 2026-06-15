@@ -38,7 +38,20 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         right={
           <>
             {presence}
-            <button className="btn primary sm" onClick={() => setStatusStage(next ?? p.stage)}>
+            {next && (
+              <button
+                className="btn primary sm"
+                title="Move to the next stage in one click"
+                onClick={() => onSetStatus(next, stageDef(next).defaultTeam, '')}
+              >
+                Advance → {stageDef(next).shortLabel}
+              </button>
+            )}
+            <button
+              className="btn sm"
+              title="Pick any stage and add a comment"
+              onClick={() => setStatusStage(next ?? p.stage)}
+            >
               Change status
             </button>
             <button className="btn sm" onClick={onEdit}>Edit</button>
