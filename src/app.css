@@ -51,9 +51,14 @@
 .workspace:hover { background: var(--r-bg-hover); }
 
 .workspace .logo {
-  width: 24px; height: 24px;
+  width: 22px; height: 22px;
   border-radius: 5px;
-  object-fit: contain;
+  background: var(--r-brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -420,10 +425,15 @@
   to { opacity: 1; transform: none; }
 }
 .sso-card .logo {
-  width: 64px; height: 64px;
+  width: 52px; height: 52px;
   margin: 0 auto 18px;
-  object-fit: contain;
-  display: block;
+  border-radius: 14px;
+  background: var(--r-brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
 }
 .sso-card h1 { font-size: 22px; margin: 0 0 6px; }
 .sso-card p { color: var(--r-text-secondary); margin: 0 0 24px; }

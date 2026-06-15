@@ -59,7 +59,7 @@ export function Sidebar({
       </div>
 
       <div className="workspace">
-        <img className="logo" src="/logo-blue.png" alt="Relay" />
+        <span className="logo">R</span>
         <span className="ws-name">Relay Workspace</span>
         {devMode && <span className="dev-chip">DEV</span>}
         <span className="ws-avatar" title={`Signed in as ${userName}`}><UserIcon /></span>
