@@ -61,7 +61,10 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         <div className="pipeline">
           {STAGES.map((s, i) => {
             const cls = i < curIdx ? 'done' : i === curIdx ? 'current' : '';
-            const d = durations[s.key];
+            // Only show time the project has legitimately reached. Stages ahead
+            // of the current one read '—' even if briefly visited by mistake and
+            // then reverted — no leftover time from undone status changes.
+            const d = i <= curIdx ? durations[s.key] : undefined;
             return (
               <div className={`step ${cls}`} key={s.key}>
                 <div className="bar" />
