@@ -38,12 +38,9 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         right={
           <>
             {presence}
-            {next && (
-              <button className="btn primary sm" onClick={() => setStatusStage(next)}>
-                Advance → {stageDef(next).shortLabel}
-              </button>
-            )}
-            <button className="btn sm" onClick={() => setStatusStage(p.stage)}>Change status</button>
+            <button className="btn primary sm" onClick={() => setStatusStage(next ?? p.stage)}>
+              Change status
+            </button>
             <button className="btn sm" onClick={onEdit}>Edit</button>
             <button className="btn sm danger" onClick={onDelete}>Delete</button>
           </>
