@@ -1,4 +1,5 @@
 import type { Project } from '../types';
+import { activeEnv, orderedEnvs } from '../types';
 import { StageBadge, TeamBadge, SlaCell } from './badges';
 import { totalElapsed, formatDuration } from '../store';
 
@@ -26,7 +27,7 @@ export function ProjectsTable({ projects, onOpen }: Props) {
         <tr>
           <th>Application</th>
           <th>Owner</th>
-          <th>Envs</th>
+          <th>Active env</th>
           <th>Stage</th>
           <th>Ball at</th>
           <th>Stage SLA</th>
@@ -34,23 +35,30 @@ export function ProjectsTable({ projects, onOpen }: Props) {
         </tr>
       </thead>
       <tbody>
-        {projects.map(p => (
-          <tr key={p.id} onClick={() => onOpen(p)}>
-            <td>
-              <div className="name">{p.name}</div>
-              <div className="sub mono">{p.dns || 'no DNS yet'}</div>
-            </td>
-            <td>
-              <div>{p.owner.name}</div>
-              <div className="sub">{p.owner.title}</div>
-            </td>
-            <td className="mono">{p.environments.map(e => e.name).join(', ') || '—'}</td>
-            <td><StageBadge stage={p.stage} /></td>
-            <td><TeamBadge team={p.team} /></td>
-            <td><SlaCell project={p} /></td>
-            <td className="mono">{formatDuration(totalElapsed(p))}</td>
-          </tr>
-        ))}
+        {projects.map(p => {
+          const env = activeEnv(p);
+          const envNames = orderedEnvs(p).map(e => e.name).join(' · ') || '—';
+          return (
+            <tr key={p.id} onClick={() => onOpen(p)}>
+              <td>
+                <div className="name">{p.name}</div>
+                <div className="sub mono">{p.dns || 'no DNS yet'}</div>
+              </td>
+              <td>
+                <div>{p.owner.name}</div>
+                <div className="sub">{p.owner.title}</div>
+              </td>
+              <td>
+                <div className="mono">{env ? env.name : '—'}</div>
+                <div className="sub">{envNames}</div>
+              </td>
+              <td><StageBadge stage={env?.stage ?? null} /></td>
+              <td><TeamBadge team={env?.team ?? null} /></td>
+              <td>{env ? <SlaCell env={env} /> : <span className="sla ok">—</span>}</td>
+              <td className="mono">{env ? formatDuration(totalElapsed(env)) : '—'}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

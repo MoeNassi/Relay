@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import type { Project, Environment, FlowRule, VmSpec, StageKey, Team } from '../types';
-import { STAGES, TEAM_LABELS, stageDef } from '../types';
+import type { Project, Environment, FlowRule, VmSpec } from '../types';
 import { uid } from '../store';
 
 interface Props {
@@ -10,7 +9,8 @@ interface Props {
 }
 
 const blankVm = (): VmSpec => ({ id: uid(), role: '', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' });
-const blankEnv = (name = 'dev'): Environment => ({ id: uid(), name, vms: [blankVm()] });
+const blankEnv = (name = 'dev'): Environment =>
+  ({ id: uid(), name, vms: [blankVm()], stage: null, team: null, history: [] });
 const blankFlow = (): FlowRule => ({ id: uid(), source: '', destination: '', port: '', protocol: 'TCP', direction: 'outbound', note: '' });
 
 export function ProjectForm({ initial, onSave, onClose }: Props) {
@@ -20,8 +20,6 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
   const [ownerTitle, setOwnerTitle] = useState(initial?.owner.title ?? '');
   const [envs, setEnvs] = useState<Environment[]>(initial?.environments ?? [blankEnv()]);
   const [flows, setFlows] = useState<FlowRule[]>(initial?.flows ?? [blankFlow()]);
-  const [stage, setStage] = useState<StageKey>(initial?.stage ?? 'new');
-  const [team, setTeam] = useState<Team>(initial?.team ?? 'owner');
 
   const patchEnv = (id: string, patch: Partial<Environment>) =>
     setEnvs(es => es.map(e => (e.id === id ? { ...e, ...patch } : e)));
@@ -35,33 +33,20 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const now = new Date().toISOString();
+    // keep pipeline state (stage/team/history) intact; the form only edits specs
     const cleanEnvs = envs
-      .map(env => ({ ...env, vms: env.vms.filter(v => v.role.trim()) }))
+      .map(env => ({
+        ...env,
+        vms: env.vms.filter(v => v.role.trim()),
+        stage: env.stage ?? null,
+        team: env.team ?? null,
+        history: env.history ?? [],
+      }))
       .filter(env => env.name.trim());
     const cleanFlows = flows.filter(f => f.destination.trim() || f.port.trim());
     const project: Project = initial
-      ? {
-          ...initial,
-          name, dns,
-          owner: { name: ownerName, title: ownerTitle },
-          environments: cleanEnvs,
-          flows: cleanFlows,
-          stage, team,
-          // append a history entry if the stage was changed by hand
-          history: initial.stage === stage
-            ? initial.history
-            : [...initial.history, { stage, team, enteredAt: now }],
-        }
-      : {
-          id: uid(),
-          name, dns,
-          owner: { name: ownerName, title: ownerTitle },
-          environments: cleanEnvs,
-          flows: cleanFlows,
-          stage, team,
-          history: [{ stage, team, enteredAt: now }],
-          createdAt: now,
-        };
+      ? { ...initial, name, dns, owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows }
+      : { id: uid(), name, dns, owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows, createdAt: now };
     onSave(project);
   };
 
@@ -205,28 +190,9 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
           </button>
         </div>
 
-        <div className="card">
-          <h2>Status</h2>
-          <div className="row">
-            <div className="field">
-              <label>Stage</label>
-              <select value={stage} onChange={e => {
-                const s = e.target.value as StageKey;
-                setStage(s);
-                setTeam(stageDef(s).defaultTeam);
-              }}>
-                {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Ball at (current team)</label>
-              <select value={team} onChange={e => setTeam(e.target.value as Team)}>
-                {(Object.keys(TEAM_LABELS) as Team[]).map(t => (
-                  <option key={t} value={t}>{TEAM_LABELS[t]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div className="form-hint">
+          Each environment runs its own pipeline. After creating the project, open it
+          and use “Start” / “Change status” on each environment to track its progress.
         </div>
 
         <div className="form-actions">

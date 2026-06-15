@@ -32,7 +32,7 @@ Key management endpoints (require any active key):
 | GET | `/api/projects/:id` | none | one project |
 | POST | `/api/projects` | key | create a project |
 | PUT | `/api/projects/:id` | key | replace a project |
-| PATCH | `/api/projects/:id/status` | key | change pipeline status |
+| PATCH | `/api/projects/:id/status` | key | change ONE environment's pipeline status |
 | DELETE | `/api/projects/:id` | key | delete |
 
 Stages: `new` → `vms` → `scan` → `publication` → `live`.

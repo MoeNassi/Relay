@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import type { Project, StageKey, Team } from '../types';
+import type { StageKey, Team } from '../types';
 import { STAGES, TEAM_LABELS, stageDef } from '../types';
 
 interface Props {
-  project: Project;
+  projectName: string;
+  envName: string;
   initialStage: StageKey;
   onClose: () => void;
   onSubmit: (stage: StageKey, team: Team, note: string) => void;
 }
 
-/** Change a project's pipeline status with an optional comment for the log. */
-export function StatusChangeModal({ project, initialStage, onClose, onSubmit }: Props) {
+/** Change one environment's pipeline status with an optional comment for the log. */
+export function StatusChangeModal({ projectName, envName, initialStage, onClose, onSubmit }: Props) {
   const [stage, setStage] = useState<StageKey>(initialStage);
   const [team, setTeam] = useState<Team>(stageDef(initialStage).defaultTeam);
   const [note, setNote] = useState('');
@@ -23,7 +24,7 @@ export function StatusChangeModal({ project, initialStage, onClose, onSubmit }: 
   return (
     <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <form className="modal status-modal" onSubmit={submit}>
-        <h1>Change status — {project.name}</h1>
+        <h1>Change status — {projectName} <span className="env-pill">{envName}</span></h1>
         <div className="row" style={{ marginBottom: 14 }}>
           <div className="field">
             <label>Move to stage</label>

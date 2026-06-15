@@ -16,9 +16,15 @@ const PORT = process.env.RELAY_PORT ?? 5181;
 // In production, disable and put the UI behind SSO instead.
 const DEV_MODE = process.env.RELAY_DEV !== '0';
 
-const STAGES = ['new', 'vms', 'scan', 'publication', 'live'];
+const STAGES = ['arch', 'vms', 'deploy', 'scan', 'publication', 'live'];
+const FIRST_STAGE = STAGES[0];
 const TEAMS = ['infra', 'network', 'cybersec', 'owner'];
-const DEFAULT_TEAM = { new: 'owner', vms: 'infra', scan: 'cybersec', publication: 'network', live: 'owner' };
+const DEFAULT_TEAM = { arch: 'infra', vms: 'infra', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
+const ENV_ORDER = ['dev', 'preprod', 'prod'];
+const envRank = name => {
+  const i = ENV_ORDER.indexOf(String(name).trim().toLowerCase());
+  return i < 0 ? ENV_ORDER.length : i;
+};
 
 const uid = () => crypto.randomBytes(4).toString('hex');
 
@@ -90,26 +96,41 @@ function seed() {
       environments: [
         {
           id: uid(),
+          name: 'dev',
+          vms: [{ id: uid(), role: 'all-in-one', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' }],
+          stage: 'live',
+          team: 'owner',
+          history: [
+            { stage: 'arch', team: 'infra', enteredAt: h(20) },
+            { stage: 'vms', team: 'infra', enteredAt: h(19) },
+            { stage: 'deploy', team: 'owner', enteredAt: h(18) },
+            { stage: 'scan', team: 'cybersec', enteredAt: h(12) },
+            { stage: 'publication', team: 'network', enteredAt: h(11) },
+            { stage: 'live', team: 'owner', enteredAt: h(10) },
+          ],
+        },
+        {
+          id: uid(),
           name: 'prod',
           vms: [
             { id: uid(), role: 'app server', count: 2, vcpu: 4, ramGb: 8, diskGb: 80, os: 'Ubuntu 24.04' },
             { id: uid(), role: 'db', count: 1, vcpu: 4, ramGb: 16, diskGb: 200, os: 'Ubuntu 24.04' },
           ],
+          stage: 'scan',
+          team: 'cybersec',
+          history: [
+            { stage: 'arch', team: 'infra', enteredAt: h(9) },
+            { stage: 'vms', team: 'infra', enteredAt: h(8) },
+            { stage: 'deploy', team: 'owner', enteredAt: h(7) },
+            { stage: 'scan', team: 'cybersec', enteredAt: h(3) },
+          ],
         },
-        { id: uid(), name: 'dev', vms: [{ id: uid(), role: 'all-in-one', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' }] },
       ],
       flows: [
         { id: uid(), source: 'app server', destination: 'db', port: '5432', protocol: 'TCP', direction: 'outbound', note: 'PostgreSQL' },
         { id: uid(), source: 'app server', destination: 'smtp.um6p.ma', port: '587', protocol: 'TCP', direction: 'outbound', note: 'Mail relay' },
       ],
-      stage: 'scan',
-      team: 'cybersec',
-      history: [
-        { stage: 'new', team: 'owner', enteredAt: h(14) },
-        { stage: 'vms', team: 'infra', enteredAt: h(12) },
-        { stage: 'scan', team: 'cybersec', enteredAt: h(4) },
-      ],
-      createdAt: h(14),
+      createdAt: h(20),
     },
     {
       id: uid(),
@@ -117,25 +138,64 @@ function seed() {
       dns: 'hr.um6p.ma',
       owner: { name: 'S. Alaoui', title: 'HR Director' },
       environments: [
-        { id: uid(), name: 'prod', vms: [{ id: uid(), role: 'app server', count: 1, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }] },
+        {
+          id: uid(),
+          name: 'preprod',
+          vms: [{ id: uid(), role: 'app server', count: 1, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }],
+          stage: 'vms',
+          team: 'infra',
+          history: [
+            { stage: 'arch', team: 'infra', enteredAt: h(9) },
+            { stage: 'vms', team: 'infra', enteredAt: h(7) },
+          ],
+        },
+        {
+          id: uid(),
+          name: 'prod',
+          vms: [{ id: uid(), role: 'app server', count: 2, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }],
+          stage: null,
+          team: null,
+          history: [],
+        },
       ],
       flows: [
         { id: uid(), source: 'app server', destination: 'ad.um6p.ma', port: '636', protocol: 'TCP', direction: 'outbound', note: 'LDAPS' },
-      ],
-      stage: 'vms',
-      team: 'infra',
-      history: [
-        { stage: 'new', team: 'owner', enteredAt: h(9) },
-        { stage: 'vms', team: 'infra', enteredAt: h(7) },
       ],
       createdAt: h(9),
     },
   ];
 }
 
+/** Bring older single-pipeline projects up to the per-environment shape. */
+function migrate(list) {
+  for (const p of list) {
+    const envs = Array.isArray(p.environments) ? p.environments : [];
+    // ensure each env has pipeline fields
+    for (const e of envs) {
+      if (!('history' in e)) e.history = [];
+      if (!('stage' in e)) e.stage = null;
+      if (!('team' in e)) e.team = null;
+    }
+    // fold a legacy project-level pipeline into the first env (by promotion order)
+    if ('stage' in p || 'history' in p) {
+      const ordered = [...envs].sort((a, b) => envRank(a.name) - envRank(b.name));
+      const target = ordered[0];
+      if (target && !target.history.length && Array.isArray(p.history) && p.history.length) {
+        // remap retired stage keys: 'new' -> 'arch'
+        target.history = p.history.map(x => ({ ...x, stage: x.stage === 'new' ? 'arch' : x.stage }));
+        target.stage = p.stage === 'new' ? 'arch' : (p.stage ?? null);
+        target.team = p.team ?? null;
+      }
+      delete p.stage; delete p.team; delete p.history;
+    }
+  }
+  return list;
+}
+
 let projects;
 try {
-  projects = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  projects = migrate(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')));
+  persist();
 } catch {
   projects = seed();
   persist();
@@ -213,24 +273,30 @@ app.delete('/api/keys/:id', requireKey, (req, res) => {
   res.status(204).end();
 });
 
+function normalizeEnv(e) {
+  return {
+    id: e?.id ?? uid(),
+    name: String(e?.name ?? 'env'),
+    vms: Array.isArray(e?.vms) ? e.vms : [],
+    stage: STAGES.includes(e?.stage) ? e.stage : null,
+    team: TEAMS.includes(e?.team) ? e.team : null,
+    history: Array.isArray(e?.history) ? e.history : [],
+  };
+}
+
 app.post('/api/projects', requireKey, (req, res) => {
   const b = req.body ?? {};
   if (!b.name || !b.owner?.name) {
     return res.status(400).json({ error: 'name and owner.name are required' });
   }
-  const stage = STAGES.includes(b.stage) ? b.stage : 'new';
-  const team = TEAMS.includes(b.team) ? b.team : DEFAULT_TEAM[stage];
   const now = new Date().toISOString();
   const project = {
     id: uid(),
     name: String(b.name),
     dns: b.dns ?? '',
     owner: { name: b.owner.name, title: b.owner.title ?? '' },
-    environments: Array.isArray(b.environments) ? b.environments : [],
+    environments: (Array.isArray(b.environments) ? b.environments : []).map(normalizeEnv),
     flows: Array.isArray(b.flows) ? b.flows : [],
-    stage,
-    team,
-    history: Array.isArray(b.history) && b.history.length ? b.history : [{ stage, team, enteredAt: now }],
     createdAt: now,
   };
   projects.push(project);
@@ -248,23 +314,45 @@ app.put('/api/projects/:id', requireKey, (req, res) => {
   res.json(projects[i]);
 });
 
-// Agents change pipeline status here; history (and thus SLA clocks) updates
-// automatically. An optional `note` (comment) is recorded on the history entry.
+function orderedEnvsSrv(p) {
+  return [...p.environments]
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => envRank(a.e.name) - envRank(b.e.name) || a.i - b.i)
+    .map(x => x.e);
+}
+// An env is unlocked once the previous env (promotion order) is live; first is open.
+function envUnlockedSrv(p, env) {
+  const o = orderedEnvsSrv(p);
+  const idx = o.findIndex(e => e.id === env.id);
+  if (idx <= 0) return true;
+  return o[idx - 1].stage === 'live';
+}
+
+// Agents change the status of ONE environment here; its history (and thus SLA
+// clocks) updates automatically. Optional `note` is recorded on the entry.
+// Body: { envId, stage, team?, note? }.
 app.patch('/api/projects/:id/status', requireKey, (req, res) => {
   const p = projects.find(x => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'not found' });
-  const { stage, team, note } = req.body ?? {};
+  const { envId, stage, team, note } = req.body ?? {};
+  const env = p.environments.find(e => e.id === envId);
+  if (!env) {
+    return res.status(400).json({ error: 'envId is required and must match an environment' });
+  }
   if (!STAGES.includes(stage)) {
     return res.status(400).json({ error: `stage must be one of: ${STAGES.join(', ')}` });
+  }
+  if (!envUnlockedSrv(p, env)) {
+    return res.status(409).json({ error: 'previous environment must be live before this one can start' });
   }
   const t = TEAMS.includes(team) ? team : DEFAULT_TEAM[stage];
   const by = req.user?.name ?? req.keyInfo?.name ?? null;
   const entry = { stage, team: t, enteredAt: new Date().toISOString() };
   if (typeof note === 'string' && note.trim()) entry.note = note.trim().slice(0, 500);
   if (by) entry.by = by;
-  p.stage = stage;
-  p.team = t;
-  p.history.push(entry);
+  env.stage = stage;
+  env.team = t;
+  env.history.push(entry);
   persist();
   broadcastProjects();
   res.json(p);

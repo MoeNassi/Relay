@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Project } from './types';
+import { activeEnv } from './types';
 import {
   connectRelay, apiCreate, apiReplace, apiSetStatus, apiDelete,
   fetchMe, login, logout, type PresenceUser, type AuthState,
@@ -86,8 +87,8 @@ export default function App() {
     let list = projects;
     if (filter !== 'all') {
       list = filter.startsWith('team:')
-        ? list.filter(p => p.team === filter.slice(5))
-        : list.filter(p => p.stage === filter);
+        ? list.filter(p => activeEnv(p)?.team === filter.slice(5))
+        : list.filter(p => activeEnv(p)?.stage === filter);
     }
     const q = search.trim().toLowerCase();
     if (q) {
@@ -145,7 +146,7 @@ export default function App() {
                 apiDelete(open.id).then(() => setOpenId(null)).catch(fail);
               }
             }}
-            onSetStatus={(stage, team, note) => apiSetStatus(open.id, stage, team, note).catch(fail)}
+            onSetStatus={(envId, stage, team, note) => apiSetStatus(open.id, envId, stage, team, note).catch(fail)}
           />
         ) : (
           <>

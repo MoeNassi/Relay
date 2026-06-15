@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Project, Team } from '../types';
-import { STAGES, TEAM_LABELS } from '../types';
+import { STAGES, TEAM_LABELS, activeEnv } from '../types';
 import {
   PanelIcon, SearchIcon, PlusIcon, LayersIcon, ServerIcon, ShieldIcon,
   NetworkIcon, UserIcon, MoonIcon, SunIcon, ChevronIcon, GearIcon,
@@ -88,7 +88,7 @@ export function Sidebar({
           Pipeline <ChevronIcon open={isOpen('pipeline')} />
         </button>
         {isOpen('pipeline') && STAGES.map(s => {
-          const n = projects.filter(p => p.stage === s.key).length;
+          const n = projects.filter(p => activeEnv(p)?.stage === s.key).length;
           return (
             <button
               key={s.key}
@@ -106,7 +106,7 @@ export function Sidebar({
           Ball at <ChevronIcon open={isOpen('teams')} />
         </button>
         {isOpen('teams') && (['infra', 'network', 'cybersec'] as Team[]).map(t => {
-          const n = projects.filter(p => p.team === t).length;
+          const n = projects.filter(p => activeEnv(p)?.team === t).length;
           const key: Filter = `team:${t}`;
           return (
             <button

@@ -153,8 +153,9 @@
 .nav-item.active .nav-ico { color: var(--r-text); }
 
 .stage-dot { width: 8px; height: 8px; border-radius: 50%; }
-.d-new { background: var(--r-text-secondary); }
+.d-arch { background: var(--r-text-secondary); }
 .d-vms { background: var(--r-brand); }
+.d-deploy { background: #6b7280; }
 .d-scan { background: var(--r-violet); }
 .d-publication { background: var(--r-amber); }
 .d-live { background: var(--r-green); }
@@ -363,11 +364,13 @@
   white-space: nowrap;
 }
 .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.badge.b-new { color: var(--r-text-secondary); background: var(--r-bg-hover); }
+.badge.b-arch { color: var(--r-text-secondary); background: var(--r-bg-hover); }
 .badge.b-vms { color: var(--r-brand); background: var(--r-brand-soft); }
+.badge.b-deploy { color: #6b7280; background: var(--r-bg-hover); }
 .badge.b-scan { color: var(--r-violet); background: var(--r-violet-soft); }
 .badge.b-publication { color: var(--r-amber); background: var(--r-amber-soft); }
 .badge.b-live { color: var(--r-green); background: var(--r-green-soft); }
+.badge.b-none { color: var(--r-text-secondary); background: var(--r-bg-hover); }
 .badge.b-team { color: var(--r-text); background: var(--r-bg-hover); font-weight: 500; }
 
 .sla { font-family: var(--r-mono); font-size: 12.5px; }
@@ -493,6 +496,71 @@
   padding: 48px 0;
 }
 
+/* ---------- environment switcher ---------- */
+.env-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.env-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+  padding: 10px 14px;
+  border: 1px solid var(--r-border);
+  border-radius: var(--r-radius-lg);
+  background: var(--r-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.env-tab:hover { background: var(--r-bg-hover); }
+.env-tab.active { border-color: var(--r-brand); background: var(--r-brand-soft); }
+.env-tab-name { font-weight: 700; font-size: 14px; text-transform: capitalize; }
+.env-tab-status { font-size: 12px; color: var(--r-text-secondary); }
+.env-tab.st-live .env-tab-status { color: var(--r-green); font-weight: 600; }
+.env-tab.st-wip .env-tab-status { color: var(--r-brand); font-weight: 600; }
+.env-tab.st-locked { opacity: 0.6; }
+
+.env-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.env-gate {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.gate-lock { font-size: 26px; }
+.gate-title { font-weight: 700; font-size: 15px; }
+.gate-sub { color: var(--r-text-secondary); font-size: 13px; margin-top: 2px; }
+
+.env-pill {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--r-brand);
+  background: var(--r-brand-soft);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-left: 6px;
+}
+
+.form-hint {
+  font-size: 13px;
+  color: var(--r-text-secondary);
+  background: var(--r-bg-secondary);
+  border: 1px solid var(--r-border);
+  border-radius: var(--r-radius);
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+
 /* ---------- SLA hero ---------- */
 .sla-hero {
   display: grid;
@@ -552,6 +620,7 @@
 .stage-dur.ok { color: var(--r-green); }
 .stage-dur.current { color: var(--r-brand); }
 .stage-dur.over { color: var(--r-red); }
+.stage-dur.neutral { color: var(--r-text-secondary); }
 .stage-dur.pending { font-size: 13px; font-weight: 500; color: var(--r-text-secondary); margin-left: auto; }
 .stage-target { font-size: 12.5px; color: var(--r-text-secondary); min-width: 130px; text-align: right; }
 .stage-flag {
@@ -658,7 +727,9 @@
 .table tbody tr:nth-child(5) { animation-delay: 0.19s; }
 .table tbody tr:nth-child(n+6) { animation-delay: 0.23s; }
 
-.page > .card, .page .detail-grid > .card { animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Transform-only so a card is NEVER left invisible if the animation doesn't run. */
+@keyframes riseIn { from { transform: translateY(8px); } to { transform: none; } }
+.page > .card, .page .detail-grid > .card { animation: riseIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .page > .card:nth-of-type(2) { animation-delay: 0.06s; }
 .page > .card:nth-of-type(3) { animation-delay: 0.12s; }
 .page > .card:nth-of-type(n+4) { animation-delay: 0.18s; }

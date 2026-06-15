@@ -1,5 +1,5 @@
-import type { Project, StageKey } from './types';
-import { STAGES, stageIndex, stageDef } from './types';
+import type { Project, StageKey, Environment } from './types';
+import { STAGES, FIRST_STAGE, stageIndex, stageDef } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -72,8 +72,9 @@ export async function logout(): Promise<void> {
 
 export const apiCreate = (p: Project) => call<Project>('POST', '/api/projects', p);
 export const apiReplace = (p: Project) => call<Project>('PUT', `/api/projects/${p.id}`, p);
-export const apiSetStatus = (id: string, stage: StageKey, team?: string, note?: string) =>
-  call<Project>('PATCH', `/api/projects/${id}/status`, { stage, team, note });
+/** Change the status of ONE environment within a project. */
+export const apiSetStatus = (id: string, envId: string, stage: StageKey, team?: string, note?: string) =>
+  call<Project>('PATCH', `/api/projects/${id}/status`, { envId, stage, team, note });
 export const apiDelete = (id: string) => call<void>('DELETE', `/api/projects/${id}`);
 
 /* ---------- API key management ---------- */
@@ -141,27 +142,39 @@ export function connectRelay(userName: string, events: RelayEvents): () => void 
   };
 }
 
-/* ---------- SLA / duration math (pure) ---------- */
+/* ---------- SLA / duration math (pure, per-environment) ---------- */
 
-/** Time spent in each visited stage, in ms. Current stage counts up to now. */
-export function stageDurations(p: Project): Partial<Record<StageKey, number>> {
+/** Time spent in each visited stage of an environment, in ms. Current stage counts up to now. */
+export function stageDurations(env: Environment): Partial<Record<StageKey, number>> {
   const out: Partial<Record<StageKey, number>> = {};
-  for (let i = 0; i < p.history.length; i++) {
-    const cur = p.history[i];
-    const end = i + 1 < p.history.length ? new Date(p.history[i + 1].enteredAt).getTime() : Date.now();
+  const h = env.history;
+  for (let i = 0; i < h.length; i++) {
+    const cur = h[i];
+    const end = i + 1 < h.length ? new Date(h[i + 1].enteredAt).getTime() : Date.now();
     const start = new Date(cur.enteredAt).getTime();
     out[cur.stage] = (out[cur.stage] ?? 0) + Math.max(0, end - start);
   }
   return out;
 }
 
-export function totalElapsed(p: Project): number {
-  if (!p.history.length) return 0;
-  const start = new Date(p.history[0].enteredAt).getTime();
-  const end = p.stage === 'live'
-    ? new Date(p.history[p.history.length - 1].enteredAt).getTime()
+/** Total wall-clock time the environment has been in flight (incl. development). */
+export function totalElapsed(env: Environment): number {
+  if (!env.history.length) return 0;
+  const start = new Date(env.history[0].enteredAt).getTime();
+  const end = env.stage === 'live'
+    ? new Date(env.history[env.history.length - 1].enteredAt).getTime()
     : Date.now();
   return Math.max(0, end - start);
+}
+
+/** Time across team-owned (SLA-bearing) stages only — excludes development/deploy. */
+export function activeHandlingTime(env: Environment): number {
+  const d = stageDurations(env);
+  let sum = 0;
+  for (const s of STAGES) {
+    if (s.slaHours != null && d[s.key]) sum += d[s.key]!;
+  }
+  return sum;
 }
 
 export function formatDuration(ms: number): string {
@@ -179,19 +192,22 @@ export function formatDuration(ms: number): string {
   return rh ? `${d}d ${rh}h` : `${d}d`;
 }
 
-/** SLA status of the CURRENT stage: ratio of elapsed vs target. */
-export function slaStatus(p: Project): { ratio: number; elapsed: number; target: number } | null {
-  const def = stageDef(p.stage);
+/** SLA status of the environment's CURRENT stage: ratio of elapsed vs target. */
+export function slaStatus(env: Environment): { ratio: number; elapsed: number; target: number } | null {
+  if (!env.stage) return null;
+  const def = stageDef(env.stage);
   if (def.slaHours == null) return null;
-  const last = p.history[p.history.length - 1];
+  const last = env.history[env.history.length - 1];
   if (!last) return null;
   const elapsed = Date.now() - new Date(last.enteredAt).getTime();
   const target = def.slaHours * 3600_000;
   return { ratio: elapsed / target, elapsed, target };
 }
 
-export function nextStage(p: Project): StageKey | null {
-  const i = stageIndex(p.stage);
+/** Next stage after the environment's current one (null at the end / not started). */
+export function nextStage(env: Environment): StageKey | null {
+  if (!env.stage) return FIRST_STAGE;
+  const i = stageIndex(env.stage);
   return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1].key : null;
 }
 
@@ -206,16 +222,17 @@ export interface StageStat {
   slaMs: number | null; // SLA target for the stage
   ratio: number | null; // ms / slaMs
   breached: boolean;    // took longer than the SLA target
+  noSla: boolean;       // development/deploy stage — never flagged
 }
 
 /**
- * Per-stage SLA breakdown for the project view: how long each task took, with a
+ * Per-stage SLA breakdown for an environment: how long each task took, with a
  * flag when it blew past its SLA target. Stages ahead of the current one are
  * 'pending' with no time, so a reverted mistaken advance reads clean.
  */
-export function stageBreakdown(p: Project): StageStat[] {
-  const durations = stageDurations(p);
-  const curIdx = stageIndex(p.stage);
+export function stageBreakdown(env: Environment): StageStat[] {
+  const durations = stageDurations(env);
+  const curIdx = env.stage ? stageIndex(env.stage) : -1;
   return STAGES.map((s, i) => {
     const state: StageState = i < curIdx ? 'done' : i === curIdx ? 'current' : 'pending';
     const ms = state === 'pending' ? null : durations[s.key] ?? 0;
@@ -230,6 +247,7 @@ export function stageBreakdown(p: Project): StageStat[] {
       slaMs,
       ratio,
       breached: ratio != null && ratio > 1,
+      noSla: slaMs == null,
     };
   });
 }
