@@ -6,24 +6,29 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 /* ---------- API client (server is the source of truth) ---------- */
 
 let apiKey: string | null = null;
+let keyTried = false;
 
-// Dev only: the server hands the browser its key. In production the UI
-// would authenticate via SSO session instead.
-async function ensureKey(): Promise<string> {
-  if (apiKey) return apiKey;
-  const res = await fetch('/api/key');
-  if (!res.ok) throw new Error('API key endpoint unavailable (server down?)');
-  apiKey = (await res.json()).key;
-  return apiKey!;
+// In SSO mode the browser authenticates by session cookie, so /api/key is gone
+// (404) — we just rely on the cookie. In dev mode the server hands out a key.
+// Try once, cache the result, and never block API calls if it's unavailable.
+async function ensureKey(): Promise<string | null> {
+  if (keyTried) return apiKey;
+  keyTried = true;
+  try {
+    const res = await fetch('/api/key');
+    if (res.ok) apiKey = (await res.json()).key;
+  } catch { /* SSO mode or server down — fall back to cookie auth */ }
+  return apiKey;
 }
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = await ensureKey();
+  if (key) headers['X-API-Key'] = key;
   const res = await fetch(url, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': await ensureKey(),
-    },
+    headers,
+    credentials: 'same-origin',   // send the session cookie in SSO mode
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
@@ -31,6 +36,30 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
     throw new Error((err as { error?: string }).error ?? `${method} ${url}: ${res.status}`);
   }
   return res.status === 204 ? (undefined as T) : res.json();
+}
+
+/* ---------- auth ---------- */
+export interface AuthUser { name: string; email: string; oid: string | null }
+export interface AuthState { user: AuthUser; mode: 'sso' | 'dev' }
+
+/** Resolve the current session. Returns null if not authenticated. */
+export async function fetchMe(): Promise<AuthState | null> {
+  try {
+    const res = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!res.ok) return null;
+    return (await res.json()) as AuthState;
+  } catch {
+    return null;
+  }
+}
+
+export function login(): void {
+  window.location.href = '/auth/login';
+}
+
+export async function logout(): Promise<void> {
+  try { await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
+  window.location.reload();
 }
 
 export const apiCreate = (p: Project) => call<Project>('POST', '/api/projects', p);
@@ -55,7 +84,8 @@ export const apiListKeys = () => call<ApiKeyInfo[]>('GET', '/api/keys');
 /** The full secret is only present in this response — show it once. */
 export const apiCreateKey = (name: string) =>
   call<ApiKeyInfo & { key: string }>('POST', '/api/keys', { name });
-export const apiRevokeKey = (id: string) => call<ApiKeyInfo>('DELETE', `/api/keys/${id}`);
+/** Revoked keys are deleted outright — they disappear from the list. */
+export const apiRevokeKey = (id: string) => call<void>('DELETE', `/api/keys/${id}`);
 
 /* ---------- websocket: projects + presence ---------- */
 
