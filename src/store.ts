@@ -6,14 +6,13 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 /* ---------- API client (server is the source of truth) ---------- */
 
 let apiKey: string | null = null;
-let keyTried = false;
 
 // In SSO mode the browser authenticates by session cookie, so /api/key is gone
-// (404) — we just rely on the cookie. In dev mode the server hands out a key.
-// Try once, cache the result, and never block API calls if it's unavailable.
-async function ensureKey(): Promise<string | null> {
-  if (keyTried) return apiKey;
-  keyTried = true;
+// (404) and we rely on the cookie. In dev mode the server hands out a key here.
+// Only a *successful* fetch is cached — a failure is never latched, so toggling
+// SSO on/off (or starting the server later) self-heals without a page refresh.
+async function ensureKey(force = false): Promise<string | null> {
+  if (apiKey && !force) return apiKey;
   try {
     const res = await fetch('/api/key');
     if (res.ok) apiKey = (await res.json()).key;
@@ -21,16 +20,25 @@ async function ensureKey(): Promise<string | null> {
   return apiKey;
 }
 
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function doFetch(method: string, url: string, body: unknown, key: string | null) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = await ensureKey();
   if (key) headers['X-API-Key'] = key;
-  const res = await fetch(url, {
+  return fetch(url, {
     method,
     headers,
     credentials: 'same-origin',   // send the session cookie in SSO mode
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+  let res = await doFetch(method, url, body, await ensureKey());
+  // A 401 can mean our cached key is stale (e.g. SSO was just toggled, or the
+  // server restarted). Re-fetch the key once and retry before giving up.
+  if (res.status === 401) {
+    const fresh = await ensureKey(true);
+    if (fresh) res = await doFetch(method, url, body, fresh);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { error?: string }).error ?? `${method} ${url}: ${res.status}`);
