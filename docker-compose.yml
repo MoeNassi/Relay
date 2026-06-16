@@ -1,0 +1,35 @@
+# Production deployment for Relay.
+#
+#   docker compose up -d --build     build + start
+#   docker compose logs -f           tail logs
+#   docker compose down              stop (data volume preserved)
+#
+# The app (UI + API + WebSocket) is served on port 5181. Put a TLS-terminating
+# reverse proxy (nginx/Caddy/Traefik) in front for HTTPS — see DEPLOY.md.
+#
+# SSO is optional: leave the RELAY_SSO_* vars unset to run without sign-in
+# (local dev user). To enable Microsoft Entra SSO, copy .env.example to .env,
+# fill it in, and the values below pick it up.
+
+services:
+  relay:
+    build: .
+    image: relay:latest
+    restart: unless-stopped
+    ports:
+      - "5181:5181"
+    environment:
+      NODE_ENV: production
+      # --- optional Microsoft Entra SSO (omit to disable) ---
+      RELAY_SSO_TENANT_ID: ${RELAY_SSO_TENANT_ID:-}
+      RELAY_SSO_CLIENT_ID: ${RELAY_SSO_CLIENT_ID:-}
+      RELAY_SSO_CLIENT_SECRET: ${RELAY_SSO_CLIENT_SECRET:-}
+      RELAY_SSO_REDIRECT_URI: ${RELAY_SSO_REDIRECT_URI:-}
+      RELAY_SSO_ALLOWED_DOMAIN: ${RELAY_SSO_ALLOWED_DOMAIN:-um6p.ma}
+      RELAY_SSO_SECURE: ${RELAY_SSO_SECURE:-1}
+    volumes:
+      # persist projects.json + api-keys.json across restarts/rebuilds
+      - relay-data:/app/server/data
+
+volumes:
+  relay-data:
