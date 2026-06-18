@@ -11,6 +11,7 @@ import { Sidebar, type Filter } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Presence } from './components/Presence';
 import { ProjectsTable } from './components/ProjectsTable';
+import { DashboardCharts } from './components/DashboardCharts';
 import { ProjectForm } from './components/ProjectForm';
 import { ProjectDetail } from './components/ProjectDetail';
 import { Settings } from './components/Settings';
@@ -191,6 +192,7 @@ export default function App() {
                   </span>
                 </div>
               </div>
+              {projects.length > 0 && <DashboardCharts projects={projects} />}
               <ProjectsTable projects={visible} onOpen={p => setOpenId(p.id)} />
             </div>
           </>

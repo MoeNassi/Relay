@@ -56,6 +56,14 @@ export const ShieldIcon = ({ size = 17 }: IconProps) => (
   </svg>
 );
 
+export const CodeIcon = ({ size = 17 }: IconProps) => (
+  <svg {...base(size)}>
+    <polyline points="8 7 3 12 8 17" />
+    <polyline points="16 7 21 12 16 17" />
+    <line x1="13" y1="5" x2="11" y2="19" />
+  </svg>
+);
+
 export const NetworkIcon = ({ size = 17 }: IconProps) => (
   <svg {...base(size)}>
     <circle cx="12" cy="12" r="9" />

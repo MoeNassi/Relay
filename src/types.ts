@@ -1,6 +1,6 @@
 export type StageKey = 'arch' | 'vms' | 'deploy' | 'scan' | 'publication' | 'live';
 
-export type Team = 'infra' | 'network' | 'cybersec' | 'owner';
+export type Team = 'devops' | 'infra' | 'network' | 'cybersec' | 'owner';
 
 export interface StageDef {
   key: StageKey;
@@ -14,7 +14,7 @@ export interface StageDef {
 
 /** The procedure every environment runs through, in order. */
 export const STAGES: StageDef[] = [
-  { key: 'arch',        label: 'Architecture & spec check', shortLabel: 'Arch',    defaultTeam: 'infra',    slaHours: 48 },
+  { key: 'arch',        label: 'Architecture & spec check', shortLabel: 'Arch',    defaultTeam: 'devops',   slaHours: 48 },
   { key: 'vms',         label: 'VM creation',               shortLabel: 'VMs',     defaultTeam: 'infra',    slaHours: 120 },
   { key: 'deploy',      label: 'Development & deployment',   shortLabel: 'Deploy',  defaultTeam: 'owner',    slaHours: null },
   { key: 'scan',        label: 'Security scan',             shortLabel: 'Scan',    defaultTeam: 'cybersec', slaHours: 168 },
@@ -25,6 +25,7 @@ export const STAGES: StageDef[] = [
 export const FIRST_STAGE = STAGES[0].key;
 
 export const TEAM_LABELS: Record<Team, string> = {
+  devops: 'IT-Prod (DevOps)',
   infra: 'Infrastructure',
   network: 'Network',
   cybersec: 'Cybersecurity',

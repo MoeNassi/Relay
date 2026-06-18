@@ -659,6 +659,68 @@
   margin-top: 4px;
 }
 
+/* ---------- dashboard charts ---------- */
+.dash-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.chart-card { margin-bottom: 0; }
+
+/* SLA health stacked bar */
+.health-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--r-bg-hover);
+  margin-bottom: 14px;
+}
+.health-bar .seg { height: 100%; transition: width 0.4s ease; }
+.health-bar .seg.ok { background: var(--r-green); }
+.health-bar .seg.warn { background: var(--r-amber); }
+.health-bar .seg.over { background: var(--r-red); }
+.health-legend { display: flex; gap: 18px; font-size: 13px; flex-wrap: wrap; }
+.health-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--r-text-secondary); }
+.health-legend b { color: var(--r-text); }
+.health-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.health-legend .dot.ok { background: var(--r-green); }
+.health-legend .dot.warn { background: var(--r-amber); }
+.health-legend .dot.over { background: var(--r-red); }
+
+/* time-by-team bars */
+.team-bars { display: flex; flex-direction: column; gap: 10px; }
+.team-bar-row { display: flex; align-items: center; gap: 10px; }
+.team-bar-label { width: 120px; flex-shrink: 0; font-size: 12.5px; font-weight: 500; }
+.team-bar-track {
+  flex: 1;
+  height: 14px;
+  background: var(--r-bg-hover);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.team-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 7px;
+  min-width: 3px;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.team-bar-fill.lead { box-shadow: 0 0 0 1.5px var(--r-bg), 0 0 0 3px currentColor; }
+.team-bar-val {
+  width: 64px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--r-mono);
+  font-size: 12.5px;
+  color: var(--r-text-secondary);
+}
+
+@media (max-width: 760px) {
+  .dash-charts { grid-template-columns: 1fr; }
+}
+
 /* ---------- SLA hero ---------- */
 .sla-hero {
   display: grid;

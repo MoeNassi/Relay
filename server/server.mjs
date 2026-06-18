@@ -18,8 +18,8 @@ const DEV_MODE = process.env.RELAY_DEV !== '0';
 
 const STAGES = ['arch', 'vms', 'deploy', 'scan', 'publication', 'live'];
 const FIRST_STAGE = STAGES[0];
-const TEAMS = ['infra', 'network', 'cybersec', 'owner'];
-const DEFAULT_TEAM = { arch: 'infra', vms: 'infra', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
+const TEAMS = ['devops', 'infra', 'network', 'cybersec', 'owner'];
+const DEFAULT_TEAM = { arch: 'devops', vms: 'infra', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
 const ENV_ORDER = ['dev', 'preprod', 'prod'];
 const envRank = name => {
   const i = ENV_ORDER.indexOf(String(name).trim().toLowerCase());
@@ -101,7 +101,7 @@ function seed() {
           stage: 'live',
           team: 'owner',
           history: [
-            { stage: 'arch', team: 'infra', enteredAt: h(20) },
+            { stage: 'arch', team: 'devops', enteredAt: h(20) },
             { stage: 'vms', team: 'infra', enteredAt: h(19) },
             { stage: 'deploy', team: 'owner', enteredAt: h(18) },
             { stage: 'scan', team: 'cybersec', enteredAt: h(12) },
@@ -119,7 +119,7 @@ function seed() {
           stage: 'scan',
           team: 'cybersec',
           history: [
-            { stage: 'arch', team: 'infra', enteredAt: h(9) },
+            { stage: 'arch', team: 'devops', enteredAt: h(9) },
             { stage: 'vms', team: 'infra', enteredAt: h(8) },
             { stage: 'deploy', team: 'owner', enteredAt: h(7) },
             { stage: 'scan', team: 'cybersec', enteredAt: h(3) },
@@ -145,7 +145,7 @@ function seed() {
           stage: 'vms',
           team: 'infra',
           history: [
-            { stage: 'arch', team: 'infra', enteredAt: h(9) },
+            { stage: 'arch', team: 'devops', enteredAt: h(9) },
             { stage: 'vms', team: 'infra', enteredAt: h(7) },
           ],
         },
@@ -187,6 +187,13 @@ function migrate(list) {
         target.team = p.team ?? null;
       }
       delete p.stage; delete p.team; delete p.history;
+    }
+    // architecture review now belongs to IT-Prod (DevOps), not Infra
+    for (const e of envs) {
+      for (const x of e.history) {
+        if (x.stage === 'arch' && x.team === 'infra') x.team = 'devops';
+      }
+      if (e.stage === 'arch' && e.team === 'infra') e.team = 'devops';
     }
   }
   return list;

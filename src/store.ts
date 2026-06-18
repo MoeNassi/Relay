@@ -1,4 +1,4 @@
-import type { Project, StageKey, Environment } from './types';
+import type { Project, StageKey, Environment, Team } from './types';
 import { STAGES, FIRST_STAGE, stageIndex, stageDef } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -153,6 +153,27 @@ export function stageDurations(env: Environment): Partial<Record<StageKey, numbe
     const end = i + 1 < h.length ? new Date(h[i + 1].enteredAt).getTime() : Date.now();
     const start = new Date(cur.enteredAt).getTime();
     out[cur.stage] = (out[cur.stage] ?? 0) + Math.max(0, end - start);
+  }
+  return out;
+}
+
+/**
+ * Time each team held the ball within an environment, in ms — counting only
+ * SLA-bearing stages (so the no-SLA development phase doesn't make the owner
+ * look like a bottleneck). Used by the dashboard to find the slowest team.
+ */
+export function teamDurations(env: Environment): Partial<Record<Team, number>> {
+  const out: Partial<Record<Team, number>> = {};
+  const h = env.history;
+  for (let i = 0; i < h.length; i++) {
+    const cur = h[i];
+    if (stageDef(cur.stage).slaHours == null) continue; // skip deploy / live
+    const last = i + 1 >= h.length;
+    const end = !last
+      ? new Date(h[i + 1].enteredAt).getTime()
+      : env.stage === 'live' ? new Date(cur.enteredAt).getTime() : Date.now();
+    const start = new Date(cur.enteredAt).getTime();
+    out[cur.team] = (out[cur.team] ?? 0) + Math.max(0, end - start);
   }
   return out;
 }

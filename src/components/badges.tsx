@@ -1,7 +1,7 @@
 import type { Environment, StageKey, Team } from '../types';
 import { stageDef, TEAM_LABELS } from '../types';
 import { slaStatus, formatDuration } from '../store';
-import { ServerIcon, ShieldIcon, UserIcon, NetworkIcon } from './icons';
+import { ServerIcon, ShieldIcon, UserIcon, NetworkIcon, CodeIcon } from './icons';
 
 export function StageBadge({ stage }: { stage: StageKey | null }) {
   if (!stage) return <span className="badge b-none"><span className="dot" />Not started</span>;
@@ -14,6 +14,7 @@ export function StageBadge({ stage }: { stage: StageKey | null }) {
 }
 
 const TEAM_ICONS: Record<Team, React.ReactNode> = {
+  devops: <CodeIcon size={13} />,
   infra: <ServerIcon size={13} />,
   network: <NetworkIcon size={13} />,
   cybersec: <ShieldIcon size={13} />,
