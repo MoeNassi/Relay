@@ -15,7 +15,7 @@ import { DashboardCharts } from './components/DashboardCharts';
 import { ProjectForm } from './components/ProjectForm';
 import { ProjectDetail } from './components/ProjectDetail';
 import { Settings } from './components/Settings';
-import { PanelIcon } from './components/icons';
+import { PanelIcon, SearchIcon } from './components/icons';
 import './theme.css';
 import './app.css';
 
@@ -193,6 +193,19 @@ export default function App() {
                 </div>
               </div>
               {projects.length > 0 && <DashboardCharts projects={projects} />}
+              {projects.length > 0 && (
+                <div className="page-search">
+                  <SearchIcon size={16} />
+                  <input
+                    placeholder="Search projects, owners, DNS…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button className="fb-clear-x" title="Clear search" onClick={() => setSearch('')}>✕</button>
+                  )}
+                </div>
+              )}
               <ProjectsTable projects={visible} onOpen={p => setOpenId(p.id)} />
             </div>
           </>
