@@ -10,6 +10,7 @@ import {
 import { StageBadge, TeamBadge } from './badges';
 import { TopBar } from './TopBar';
 import { StatusChangeModal } from './StatusChangeModal';
+import { ArrowLeftIcon } from './icons';
 
 interface Props {
   project: Project;
@@ -44,6 +45,9 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         }
       />
       <div className="page">
+        <button className="back-link" onClick={onBack}>
+          <ArrowLeftIcon size={15} /> Back to projects
+        </button>
         <div className="page-title-block">
           <div className="title-icon">{p.name.charAt(0).toUpperCase()}</div>
           <h1 className="page-title">{p.name}</h1>

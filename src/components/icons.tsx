@@ -34,6 +34,13 @@ export const PlusIcon = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+export const ArrowLeftIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <line x1="20" y1="12" x2="5" y2="12" />
+    <polyline points="11 18 5 12 11 6" />
+  </svg>
+);
+
 export const LayersIcon = ({ size = 17 }: IconProps) => (
   <svg {...base(size)}>
     <polygon points="12 3 21 8 12 13 3 8 12 3" />

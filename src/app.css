@@ -264,7 +264,24 @@
   padding: 2px 7px;
 }
 
-.page-title-block { margin: 24px 0 28px; }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--r-border);
+  border-radius: var(--r-radius);
+  background: var(--r-bg);
+  color: var(--r-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.back-link:hover { background: var(--r-bg-hover); color: var(--r-text); }
+
+.page-title-block { margin: 16px 0 28px; }
 .title-icon {
   width: 56px; height: 56px;
   border-radius: 12px;
