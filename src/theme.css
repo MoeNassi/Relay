@@ -67,3 +67,23 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 
 ::selection { background: var(--r-brand-soft); }
+
+/* ---------- slim, themed scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--r-border) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--r-border);
+  border-radius: 8px;
+  border: 3px solid transparent;   /* padding so the thumb reads thinner */
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--r-text-secondary);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
