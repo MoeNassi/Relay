@@ -545,71 +545,49 @@
   color: var(--r-text-secondary);
 }
 
-/* ---- pencil writing notes, then clearing them ---- */
-.notepad {
+/* ---- pipeline loader: a pulse travelling across the stage dots ---- */
+.pipe-loader {
   position: relative;
-  width: 170px;
-  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 196px;
+  height: 22px;
   margin: 0 auto;
+  padding: 0 5px;
 }
-.note-line {
+.pipe-track {
   position: absolute;
-  left: 0;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--r-brand);
-  transform: scaleX(0);
-  transform-origin: left center; /* draw L→R; erase shrinks the right edge back L-ward */
-  opacity: 1;
+  left: 10px; right: 10px; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: var(--r-border);
+  border-radius: 2px;
+  z-index: 0;
 }
-.note-line.l1 { top: 6px;  width: 100%; animation: write1 2.4s linear infinite; }
-.note-line.l2 { top: 28px; width: 78%;  background: var(--r-violet); animation: write2 2.4s linear infinite; }
-.note-line.l3 { top: 50px; width: 56%;  background: var(--r-amber);  animation: write3 2.4s linear infinite; }
+.pipe-dot {
+  position: relative;
+  z-index: 1;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  transform: scale(1);
+  opacity: 0.35;
+}
+/* stage palette, lit in sequence */
+.pipe-dot.d1 { background: #8e8d91; animation: pipe1 1.9s ease-in-out infinite; }
+.pipe-dot.d2 { background: var(--r-brand);  animation: pipe2 1.9s ease-in-out infinite; }
+.pipe-dot.d3 { background: #6b7280; animation: pipe3 1.9s ease-in-out infinite; }
+.pipe-dot.d4 { background: var(--r-violet); animation: pipe4 1.9s ease-in-out infinite; }
+.pipe-dot.d5 { background: var(--r-amber);  animation: pipe5 1.9s ease-in-out infinite; }
+.pipe-dot.d6 { background: var(--r-green);  animation: pipe6 1.9s ease-in-out infinite; }
 
-/* Each line: draw (scaleX 0→1), hold, then the flipped pencil wipes it (1→0),
-   same left origin so the erase is a smooth retract, not a fade. Erased
-   bottom-up (l3 → l2 → l1) to follow the pencil from where it finished writing. */
-@keyframes write1 {
-  0% { transform: scaleX(0); }
-  12% { transform: scaleX(1); }
-  72% { transform: scaleX(1); }
-  84%, 100% { transform: scaleX(0); }
-}
-@keyframes write2 {
-  0%, 12% { transform: scaleX(0); }
-  24% { transform: scaleX(1); }
-  58% { transform: scaleX(1); }
-  70%, 100% { transform: scaleX(0); }
-}
-@keyframes write3 {
-  0%, 24% { transform: scaleX(0); }
-  36% { transform: scaleX(1); }
-  44% { transform: scaleX(1); }
-  56%, 100% { transform: scaleX(0); }
-}
-
-.pencil {
-  position: absolute;
-  top: -14px; left: -10px;
-  font-size: 22px;
-  animation: pencilMove 2.4s ease-in-out infinite;
-}
-/* write each line L→R (tip down), flip 180° (eraser down), wipe each line R→L */
-@keyframes pencilMove {
-  0%   { transform: translate(0, 0) rotate(10deg); }
-  12%  { transform: translate(160px, 0) rotate(10deg); }
-  13%  { transform: translate(0, 22px) rotate(10deg); }
-  24%  { transform: translate(130px, 22px) rotate(10deg); }
-  25%  { transform: translate(0, 44px) rotate(10deg); }
-  36%  { transform: translate(88px, 44px) rotate(10deg); }
-  44%  { transform: translate(88px, 44px) rotate(190deg); }  /* flip in place */
-  56%  { transform: translate(0, 44px) rotate(190deg); }      /* erase l3 R→L */
-  58%  { transform: translate(130px, 22px) rotate(190deg); }  /* lift to l2 */
-  70%  { transform: translate(0, 22px) rotate(190deg); }      /* erase l2 R→L */
-  72%  { transform: translate(160px, 0) rotate(190deg); }     /* lift to l1 */
-  84%  { transform: translate(0, 0) rotate(190deg); }         /* erase l1 R→L */
-  92%, 100% { transform: translate(0, 0) rotate(10deg); }     /* flip back, ready */
-}
+/* each dot brightens + grows briefly as the pulse reaches it (staggered) */
+@keyframes pipe1 { 0%{transform:scale(1);opacity:.35} 6%{transform:scale(1.7);opacity:1} 18%,100%{transform:scale(1);opacity:.35} }
+@keyframes pipe2 { 0%,8%{transform:scale(1);opacity:.35} 16%{transform:scale(1.7);opacity:1} 28%,100%{transform:scale(1);opacity:.35} }
+@keyframes pipe3 { 0%,18%{transform:scale(1);opacity:.35} 26%{transform:scale(1.7);opacity:1} 38%,100%{transform:scale(1);opacity:.35} }
+@keyframes pipe4 { 0%,28%{transform:scale(1);opacity:.35} 36%{transform:scale(1.7);opacity:1} 48%,100%{transform:scale(1);opacity:.35} }
+@keyframes pipe5 { 0%,38%{transform:scale(1);opacity:.35} 46%{transform:scale(1.7);opacity:1} 58%,100%{transform:scale(1);opacity:.35} }
+@keyframes pipe6 { 0%,48%{transform:scale(1);opacity:.35} 56%{transform:scale(1.8);opacity:1} 70%,100%{transform:scale(1);opacity:.35} }
 
 /* ---------- environment switcher ---------- */
 .env-tabs {

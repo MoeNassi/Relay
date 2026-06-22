@@ -1,13 +1,16 @@
-/** Boot screen: a pencil jots a few notes, then it all clears — and repeats. */
+/** Boot screen: a pulse travelling across the pipeline's stage dots. */
 export function Splash({ leaving }: { leaving?: boolean }) {
   return (
     <div className={`splash ${leaving ? 'leaving' : ''}`}>
       <div className="splash-inner">
-        <div className="notepad">
-          <span className="note-line l1" />
-          <span className="note-line l2" />
-          <span className="note-line l3" />
-          <span className="pencil">✏️</span>
+        <div className="pipe-loader">
+          <span className="pipe-track" />
+          <span className="pipe-dot d1" />
+          <span className="pipe-dot d2" />
+          <span className="pipe-dot d3" />
+          <span className="pipe-dot d4" />
+          <span className="pipe-dot d5" />
+          <span className="pipe-dot d6" />
         </div>
         <div className="splash-word">Relay</div>
         <div className="splash-tag">Project pipeline tracking</div>
