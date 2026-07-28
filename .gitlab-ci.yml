@@ -1,0 +1,13 @@
+stages: [deploy]
+
+deploy-prod:
+  stage: deploy
+  tags: [relay-prod]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  variables:
+    COMPOSE_PROJECT_NAME: relay
+  scripts:
+    - docker compose up -d --build --remove-orphans
+    - docker image prune -f
+    - docker compose ps
