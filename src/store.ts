@@ -1,5 +1,5 @@
-import type { Project, StageKey, Environment, Team } from './types';
-import { STAGES, FIRST_STAGE, stageIndex, stageDef } from './types';
+import type { Project, StageKey, Environment, Team, ScanType, StageDef, HistoryEntry } from './types';
+import { STAGES, stageIndex, stageDef } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -75,6 +75,9 @@ export const apiReplace = (p: Project) => call<Project>('PUT', `/api/projects/${
 /** Change the status of ONE environment within a project. */
 export const apiSetStatus = (id: string, envId: string, stage: StageKey, team?: string, note?: string) =>
   call<Project>('PATCH', `/api/projects/${id}/status`, { envId, stage, team, note });
+/** Mark one of an environment's sub-scans (agent | pentest | cloud) done or not. */
+export const apiSetScan = (id: string, envId: string, scanType: ScanType, done: boolean) =>
+  call<Project>('PATCH', `/api/projects/${id}/scan`, { envId, scanType, done });
 export const apiDelete = (id: string) => call<void>('DELETE', `/api/projects/${id}`);
 
 /* ---------- API key management ---------- */
@@ -144,10 +147,17 @@ export function connectRelay(userName: string, events: RelayEvents): () => void 
 
 /* ---------- SLA / duration math (pure, per-environment) ---------- */
 
+/**
+ * The environment's real stage transitions — scan log entries (kind 'scan') are
+ * traceability records, not transitions, so every clock ignores them.
+ */
+const statusHistory = (env: Environment): HistoryEntry[] =>
+  env.history.filter(h => h.kind !== 'scan');
+
 /** Time spent in each visited stage of an environment, in ms. Current stage counts up to now. */
 export function stageDurations(env: Environment): Partial<Record<StageKey, number>> {
   const out: Partial<Record<StageKey, number>> = {};
-  const h = env.history;
+  const h = statusHistory(env);
   for (let i = 0; i < h.length; i++) {
     const cur = h[i];
     const end = i + 1 < h.length ? new Date(h[i + 1].enteredAt).getTime() : Date.now();
@@ -164,7 +174,7 @@ export function stageDurations(env: Environment): Partial<Record<StageKey, numbe
  */
 export function teamDurations(env: Environment): Partial<Record<Team, number>> {
   const out: Partial<Record<Team, number>> = {};
-  const h = env.history;
+  const h = statusHistory(env);
   for (let i = 0; i < h.length; i++) {
     const cur = h[i];
     if (stageDef(cur.stage).slaHours == null) continue; // skip deploy / live
@@ -180,10 +190,11 @@ export function teamDurations(env: Environment): Partial<Record<Team, number>> {
 
 /** Total wall-clock time the environment has been in flight (incl. development). */
 export function totalElapsed(env: Environment): number {
-  if (!env.history.length) return 0;
-  const start = new Date(env.history[0].enteredAt).getTime();
+  const h = statusHistory(env);
+  if (!h.length) return 0;
+  const start = new Date(h[0].enteredAt).getTime();
   const end = env.stage === 'live'
-    ? new Date(env.history[env.history.length - 1].enteredAt).getTime()
+    ? new Date(h[h.length - 1].enteredAt).getTime()
     : Date.now();
   return Math.max(0, end - start);
 }
@@ -218,18 +229,70 @@ export function slaStatus(env: Environment): { ratio: number; elapsed: number; t
   if (!env.stage) return null;
   const def = stageDef(env.stage);
   if (def.slaHours == null) return null;
-  const last = env.history[env.history.length - 1];
+  const h = statusHistory(env);
+  const last = h[h.length - 1];
   if (!last) return null;
   const elapsed = Date.now() - new Date(last.enteredAt).getTime();
   const target = def.slaHours * 3600_000;
   return { ratio: elapsed / target, elapsed, target };
 }
 
-/** Next stage after the environment's current one (null at the end / not started). */
-export function nextStage(env: Environment): StageKey | null {
-  if (!env.stage) return FIRST_STAGE;
-  const i = stageIndex(env.stage);
-  return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1].key : null;
+/**
+ * Next stage after the environment's current one (null at the end / not
+ * started). Pass the env's applicable stage list (envStages) so environments
+ * that skip the one-time arch/vms tasks advance straight through.
+ */
+export function nextStage(env: Environment, stages: StageDef[] = STAGES): StageKey | null {
+  if (!env.stage) return stages[0]?.key ?? null;
+  const cur = stageIndex(env.stage);
+  return stages.find(s => stageIndex(s.key) > cur)?.key ?? null;
+}
+
+/* ---------- per-project team SLA (who delayed the project) ---------- */
+
+export interface TeamSlaStat {
+  team: Team;
+  ms: number;      // time spent across this team's SLA-bearing stages, all envs
+  slaMs: number;   // summed SLA targets for those stage visits
+  over: boolean;   // blew past the summed target
+  overBy: number;  // how far over (0 when within)
+}
+
+/**
+ * Aggregate each team's handling time vs SLA target across every environment of
+ * a project. A stage visit is attributed to the team that actually held it
+ * (last status entry for that stage), falling back to the stage's default team.
+ * Only visited SLA-bearing stages count — skipped one-time stages and the
+ * no-clock deploy/live stages don't. Sorted worst offender first.
+ */
+export function projectTeamSla(p: Project): TeamSlaStat[] {
+  const acc = new Map<Team, { ms: number; slaMs: number }>();
+  for (const env of p.environments) {
+    const durations = stageDurations(env);
+    const curIdx = env.stage ? stageIndex(env.stage) : -1;
+    for (const s of STAGES) {
+      if (s.slaHours == null) continue;
+      const i = stageIndex(s.key);
+      if (i > curIdx) continue;                       // not reached (or rolled back)
+      const ms = durations[s.key] ?? 0;
+      if (ms <= 0 && i !== curIdx) continue;          // never actually entered (e.g. skipped one-time stage)
+      const held = [...env.history].reverse().find(h => h.kind !== 'scan' && h.stage === s.key);
+      const team = held?.team ?? s.defaultTeam;
+      const cur = acc.get(team) ?? { ms: 0, slaMs: 0 };
+      cur.ms += ms;
+      cur.slaMs += s.slaHours * 3600_000;
+      acc.set(team, cur);
+    }
+  }
+  return [...acc.entries()]
+    .map(([team, v]) => ({
+      team,
+      ms: v.ms,
+      slaMs: v.slaMs,
+      over: v.ms > v.slaMs,
+      overBy: Math.max(0, v.ms - v.slaMs),
+    }))
+    .sort((a, b) => b.overBy - a.overBy || b.ms - a.ms);
 }
 
 export type StageState = 'done' | 'current' | 'pending';
@@ -251,10 +314,11 @@ export interface StageStat {
  * flag when it blew past its SLA target. Stages ahead of the current one are
  * 'pending' with no time, so a reverted mistaken advance reads clean.
  */
-export function stageBreakdown(env: Environment): StageStat[] {
+export function stageBreakdown(env: Environment, stages: StageDef[] = STAGES): StageStat[] {
   const durations = stageDurations(env);
   const curIdx = env.stage ? stageIndex(env.stage) : -1;
-  return STAGES.map((s, i) => {
+  return stages.map(s => {
+    const i = stageIndex(s.key);
     const state: StageState = i < curIdx ? 'done' : i === curIdx ? 'current' : 'pending';
     const ms = state === 'pending' ? null : durations[s.key] ?? 0;
     const slaMs = s.slaHours != null ? s.slaHours * 3600_000 : null;

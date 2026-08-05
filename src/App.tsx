@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Project } from './types';
 import { activeEnv } from './types';
 import {
-  connectRelay, apiCreate, apiReplace, apiSetStatus, apiDelete,
+  connectRelay, apiCreate, apiReplace, apiSetStatus, apiSetScan, apiDelete,
   fetchMe, login, logout, type PresenceUser, type AuthState,
 } from './store';
 import { Landing } from './components/Landing';
@@ -109,7 +109,8 @@ export default function App() {
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(p =>
-        [p.name, p.dns, p.owner.name, p.owner.title].some(s => s.toLowerCase().includes(q))
+        [p.name, p.dns, p.owner.name, p.owner.title, ...p.environments.map(e => e.dns ?? '')]
+          .some(s => s.toLowerCase().includes(q))
       );
     }
     return list;
@@ -168,6 +169,7 @@ export default function App() {
               }
             }}
             onSetStatus={(envId, stage, team, note) => apiSetStatus(open.id, envId, stage, team, note).catch(fail)}
+            onSetScan={(envId, scanType, done) => apiSetScan(open.id, envId, scanType, done).catch(fail)}
           />
         ) : (
           <>

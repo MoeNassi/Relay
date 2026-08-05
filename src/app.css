@@ -200,7 +200,7 @@
 .signout-btn:hover { background: var(--r-bg-hover); color: var(--r-text); }
 
 .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-.page { width: 100%; max-width: 980px; margin: 0 auto; padding: 28px 48px 96px; }
+.page { width: 100%; max-width: 1280px; margin: 0 auto; padding: 28px 48px 96px; }
 
 /* ---------- Notion-style page header ---------- */
 .topbar {
@@ -358,11 +358,14 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  white-space: nowrap;
   color: var(--r-text-secondary);
   padding: 8px 12px;
   border-bottom: 1px solid var(--r-border);
 }
-.table td { padding: 11px 12px; border-bottom: 1px solid var(--r-border); }
+.table td { padding: 11px 12px; border-bottom: 1px solid var(--r-border); white-space: nowrap; }
+/* the expanded team-SLA row holds sentences — let it wrap normally */
+.team-sla-detail td { white-space: normal; }
 .table tbody tr { cursor: pointer; transition: background 0.12s ease; }
 .table tbody tr:hover { background: var(--r-bg-hover); }
 .table .name { font-weight: 600; }
@@ -722,13 +725,16 @@
 }
 .team-bar-fill.lead { box-shadow: 0 0 0 1.5px var(--r-bg), 0 0 0 3px currentColor; }
 .team-bar-val {
-  width: 64px;
   flex-shrink: 0;
+  width: 110px;
   text-align: right;
   font-family: var(--r-mono);
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--r-text-secondary);
 }
+/* the breach note gets its own line so long values can't overflow the card */
+.team-bar-flag { display: block; color: var(--r-red); font-weight: 600; white-space: nowrap; }
 
 @media (max-width: 760px) {
   .dash-charts { grid-template-columns: 1fr; }
@@ -807,6 +813,72 @@
   white-space: nowrap;
 }
 
+/* ---------- security scans ---------- */
+.scan-rows { display: flex; flex-direction: column; gap: 4px; }
+.scan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--r-radius);
+  cursor: pointer;
+}
+.scan-row:hover { background: var(--r-bg-hover); }
+.scan-row input { width: 16px; height: 16px; accent-color: var(--r-green); cursor: pointer; }
+.scan-row .scan-name { font-weight: 600; font-size: 14px; min-width: 160px; }
+.scan-row.done .scan-name { color: var(--r-green); }
+.scan-meta { font-size: 13px; color: var(--r-text-secondary); margin-left: auto; }
+.scan-meta.pending { color: var(--r-amber); font-weight: 600; }
+.scan-gate-note {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--r-amber);
+  background: var(--r-amber-soft);
+  border-radius: var(--r-radius);
+  padding: 8px 12px;
+}
+
+/* ---------- per-project team SLA breakdown (projects table) ---------- */
+.team-sla-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--r-border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: var(--r-mono);
+  cursor: pointer;
+  color: var(--r-text-secondary);
+}
+.team-sla-toggle.ok { color: var(--r-green); }
+.team-sla-toggle.late { color: var(--r-red); background: var(--r-red-soft); border-color: transparent; }
+.team-sla-toggle .chev { font-size: 10px; }
+.team-sla-toggle:hover, .team-sla-toggle.open { border-color: var(--r-text-secondary); }
+
+.team-sla-detail td { cursor: default; background: var(--r-bg-secondary); }
+.team-sla-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.team-sla-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+.team-sla-item .t-name { min-width: 160px; font-weight: 600; }
+.team-sla-item.over .t-name { color: var(--r-red); }
+.team-sla-item .t-time { font-size: 12.5px; color: var(--r-text-secondary); }
+.team-sla-item .t-flag { font-size: 12px; }
+.team-sla-item .t-flag.over { color: var(--r-red); font-weight: 600; }
+.team-sla-item .t-flag.ok { color: var(--r-green); }
+.team-sla-note { margin-top: 8px; font-size: 11.5px; color: var(--r-text-secondary); }
+
 /* ---------- activity log ---------- */
 .activity {
   list-style: none;
@@ -834,6 +906,10 @@
   padding-left: 10px;
   font-style: italic;
 }
+/* scan check/uncheck/reset trace entries — quieter than real stage changes */
+.activity-item.scan-log .activity-head strong { font-weight: 500; color: var(--r-text-secondary); }
+.activity-item.scan-log .stage-dot { opacity: 0.55; }
+.activity-item.scan-log .activity-note { font-style: normal; color: var(--r-text-secondary); }
 
 /* ---------- settings / api keys ---------- */
 .key-create { display: flex; gap: 12px; align-items: flex-end; }

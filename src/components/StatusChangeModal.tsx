@@ -1,17 +1,23 @@
 import { useState } from 'react';
-import type { StageKey, Team } from '../types';
+import type { StageDef, StageKey, Team } from '../types';
 import { STAGES, TEAM_LABELS, stageDef } from '../types';
 
 interface Props {
   projectName: string;
   envName: string;
+  /** Stages this environment actually runs (envStages) — defaults to all. */
+  stages?: StageDef[];
   initialStage: StageKey;
   onClose: () => void;
   onSubmit: (stage: StageKey, team: Team, note: string) => void;
 }
 
 /** Change one environment's pipeline status with an optional comment for the log. */
-export function StatusChangeModal({ projectName, envName, initialStage, onClose, onSubmit }: Props) {
+export function StatusChangeModal({ projectName, envName, stages = STAGES, initialStage, onClose, onSubmit }: Props) {
+  // keep a legacy current stage selectable even if this env no longer runs it
+  const options = stages.some(s => s.key === initialStage)
+    ? stages
+    : [stageDef(initialStage), ...stages];
   const [stage, setStage] = useState<StageKey>(initialStage);
   const [team, setTeam] = useState<Team>(stageDef(initialStage).defaultTeam);
   const [note, setNote] = useState('');
@@ -36,7 +42,7 @@ export function StatusChangeModal({ projectName, envName, initialStage, onClose,
                 setTeam(stageDef(s).defaultTeam);
               }}
             >
-              {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+              {options.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
           <div className="field">

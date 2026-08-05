@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import type { Project, Environment, StageKey, Team } from '../types';
+import type { Project, Environment, StageKey, Team, ScanType } from '../types';
 import {
-  TEAM_LABELS, FIRST_STAGE, stageDef,
+  TEAM_LABELS, stageDef, stageIndex,
+  SCAN_TYPES, SCAN_LABELS, scanRequired, scansDone, scansSatisfied,
   orderedEnvs, envUnlocked, envStarted, envLive, activeEnv,
+  envStages, envFirstStage, isProdEnv, envDns,
 } from '../types';
 import {
   stageBreakdown, totalElapsed, activeHandlingTime, formatDuration, slaStatus, nextStage,
@@ -19,9 +21,10 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onSetStatus: (envId: string, stage: StageKey, team: Team, note: string) => void;
+  onSetScan: (envId: string, scanType: ScanType, done: boolean) => void;
 }
 
-export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, onSetStatus }: Props) {
+export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, onSetStatus, onSetScan }: Props) {
   const envs = orderedEnvs(p);
   const [selId, setSelId] = useState<string>(() => activeEnv(p)?.id ?? envs[0]?.id ?? '');
   const [statusStage, setStatusStage] = useState<StageKey | null>(null);
@@ -55,7 +58,7 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
             <span className="meta-text">
               {p.owner.name}{p.owner.title ? ` · ${p.owner.title}` : ''}
             </span>
-            {p.dns && <span className="meta-text mono">{p.dns}</span>}
+            {env && envDns(p, env) && <span className="meta-text mono">{envDns(p, env)}</span>}
             <span className="meta-text">{envs.length} environment{envs.length === 1 ? '' : 's'}</span>
           </div>
         </div>
@@ -73,7 +76,7 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
               >
                 <span className="env-tab-name">{e.name}</span>
                 <span className="env-tab-status">
-                  {status === 'live' ? '✓ live'
+                  {status === 'live' ? (isProdEnv(e) ? '✓ live' : '✓ done')
                     : status === 'wip' ? stageDef(e.stage!).shortLabel
                     : status === 'locked' ? '🔒 locked'
                     : 'ready'}
@@ -86,9 +89,13 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         {env && <EnvPanel
           project={p}
           env={env}
-          onStart={() => setStatusStage(FIRST_STAGE)}
-          onAdvance={() => { const n = nextStage(env); if (n) onSetStatus(env.id, n, stageDef(n).defaultTeam, ''); }}
-          onChangeStatus={() => setStatusStage(env.stage ?? FIRST_STAGE)}
+          onStart={() => setStatusStage(envFirstStage(p, env))}
+          onAdvance={() => {
+            const n = nextStage(env, envStages(p, env));
+            if (n) onSetStatus(env.id, n, stageDef(n).defaultTeam, '');
+          }}
+          onChangeStatus={() => setStatusStage(env.stage ?? envFirstStage(p, env))}
+          onSetScan={(scanType, done) => onSetScan(env.id, scanType, done)}
         />}
 
         {/* project-wide flows */}
@@ -122,6 +129,7 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
         <StatusChangeModal
           projectName={p.name}
           envName={env.name}
+          stages={envStages(p, env)}
           initialStage={statusStage}
           onClose={() => setStatusStage(null)}
           onSubmit={(stage, team, note) => { onSetStatus(env.id, stage, team, note); setStatusStage(null); }}
@@ -133,18 +141,23 @@ export function ProjectDetail({ project: p, presence, onBack, onEdit, onDelete, 
 
 /* ---- the selected environment's pipeline + SLA ---- */
 function EnvPanel({
-  project: p, env, onStart, onAdvance, onChangeStatus,
+  project: p, env, onStart, onAdvance, onChangeStatus, onSetScan,
 }: {
   project: Project;
   env: Environment;
   onStart: () => void;
   onAdvance: () => void;
   onChangeStatus: () => void;
+  onSetScan: (scanType: ScanType, done: boolean) => void;
 }) {
   const ordered = orderedEnvs(p);
   const idx = ordered.findIndex(e => e.id === env.id);
   const locked = !envUnlocked(p, env);
   const started = envStarted(env);
+  // Stages THIS env runs: arch/vms only on the first env, "Completed" instead
+  // of "Live in production" everywhere but prod.
+  const envStageList = envStages(p, env);
+  const defFor = (k: StageKey) => envStageList.find(s => s.key === k) ?? stageDef(k);
 
   if (locked) {
     const prev = ordered[idx - 1];
@@ -165,7 +178,11 @@ function EnvPanel({
         <div className="gate-lock">▶</div>
         <div>
           <div className="gate-title">“{env.name}” hasn’t started</div>
-          <div className="gate-sub">Begin the pipeline with the architecture &amp; spec check.</div>
+          <div className="gate-sub">
+            {envStageList[0].key === 'arch'
+              ? <>Begin the pipeline with the architecture &amp; spec check.</>
+              : <>Begin the pipeline with {envStageList[0].label.toLowerCase()} — architecture &amp; VM creation are one-time tasks already handled on the first environment.</>}
+          </div>
         </div>
         <button className="btn primary" style={{ marginLeft: 'auto' }} onClick={onStart}>
           Start {env.name}
@@ -174,8 +191,11 @@ function EnvPanel({
     );
   }
 
-  const stages = stageBreakdown(env);
-  const next = nextStage(env);
+  const stages = stageBreakdown(env, envStageList);
+  const next = nextStage(env, envStageList);
+  // At the scan stage, advancing to publication is blocked until every required
+  // sub-scan passes (dev is exempt). Mirrors the server-side 409 guard.
+  const scanGate = env.stage === 'scan' && !scansSatisfied(env);
   const sla = slaStatus(env);
   const total = totalElapsed(env);
   const active = activeHandlingTime(env);
@@ -185,12 +205,17 @@ function EnvPanel({
   return (
     <>
       <div className="env-actions">
-        <StageBadge stage={env.stage} />
+        <StageBadge stage={env.stage} label={env.stage ? defFor(env.stage).shortLabel : undefined} />
         <TeamBadge team={env.team} />
         <div style={{ flex: 1 }} />
         {next && (
-          <button className="btn primary sm" onClick={onAdvance}>
-            Advance → {stageDef(next).shortLabel}
+          <button
+            className="btn primary sm"
+            onClick={onAdvance}
+            disabled={scanGate}
+            title={scanGate ? 'Complete all security scans before advancing' : undefined}
+          >
+            Advance → {defFor(next).shortLabel}
           </button>
         )}
         <button className="btn sm" onClick={onChangeStatus}>Change status</button>
@@ -204,7 +229,7 @@ function EnvPanel({
         </div>
         <div className="sla-stat">
           <div className="sla-stat-label">Current stage</div>
-          <div className="sla-stat-value">{stageDef(env.stage!).shortLabel}</div>
+          <div className="sla-stat-value">{defFor(env.stage!).shortLabel}</div>
           <div className={`sla-stat-sub sla ${slaClass}`}>
             {sla ? `${formatDuration(sla.elapsed)} / ${formatDuration(sla.target)} SLA` : 'no SLA clock'}
           </div>
@@ -244,6 +269,46 @@ function EnvPanel({
         </div>
       </div>
 
+      {stageIndex(env.stage!) >= stageIndex('scan') && (
+        <div className="card">
+          <h2>
+            Security scans
+            <span className="hint">
+              {scanRequired(env)
+                ? `${scansDone(env)}/${SCAN_TYPES.length} passed — all required before publication`
+                : `${env.name} is exempt — scans optional`}
+            </span>
+          </h2>
+          <div className="scan-rows">
+            {SCAN_TYPES.map(t => {
+              const done = env.scans?.[t] ?? null;
+              return (
+                <label className={`scan-row ${done ? 'done' : 'pending'}`} key={t}>
+                  <input
+                    type="checkbox"
+                    checked={!!done}
+                    onChange={e => onSetScan(t, e.target.checked)}
+                  />
+                  <span className="scan-name">{SCAN_LABELS[t]}</span>
+                  {done ? (
+                    <span className="scan-meta">
+                      passed {new Date(done.at).toLocaleString()}{done.by ? ` · ${done.by}` : ''}
+                    </span>
+                  ) : (
+                    <span className="scan-meta pending">outstanding</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          {scanGate && (
+            <div className="scan-gate-note">
+              🔒 Publication is blocked until all three scans pass.
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="detail-grid">
         <div className="card">
           <h2>VM specs<span className="hint">{env.name}</span></h2>
@@ -272,17 +337,17 @@ function EnvPanel({
           <h2>Activity log<span className="hint">{env.name} — status changes &amp; comments</span></h2>
           <ol className="activity">
             {[...env.history].reverse().map((h, i) => (
-              <li className="activity-item" key={env.history.length - i}>
+              <li className={`activity-item ${h.kind === 'scan' ? 'scan-log' : ''}`} key={env.history.length - i}>
                 <span className={`stage-dot d-${h.stage}`} />
                 <div className="activity-body">
                   <div className="activity-head">
-                    <strong>{stageDef(h.stage).shortLabel}</strong>
+                    <strong>{h.kind === 'scan' ? 'Security scan' : defFor(h.stage).shortLabel}</strong>
                     <span className="activity-meta">
                       {TEAM_LABELS[h.team]}{h.by ? ` · ${h.by}` : ''}
                     </span>
                     <span className="activity-time">{new Date(h.enteredAt).toLocaleString()}</span>
                   </div>
-                  {h.note && <div className="activity-note">“{h.note}”</div>}
+                  {h.note && <div className="activity-note">{h.kind === 'scan' ? h.note : `“${h.note}”`}</div>}
                 </div>
               </li>
             ))}

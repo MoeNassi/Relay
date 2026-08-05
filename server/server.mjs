@@ -19,8 +19,17 @@ const DEV_MODE = process.env.RELAY_DEV !== '0';
 const STAGES = ['arch', 'vms', 'deploy', 'scan', 'publication', 'live'];
 const FIRST_STAGE = STAGES[0];
 const TEAMS = ['devops', 'infra', 'network', 'cybersec', 'owner'];
+// Security scans that run under the `scan` stage. Every env must pass all three
+// before publication EXCEPT `dev`, which is exempt.
+const SCAN_TYPES = ['agent', 'pentest', 'cloud'];
+const SCAN_LABELS = { agent: 'Agent scan', pentest: 'Penetration test', cloud: 'Cloud scan' };
+// One-time tasks: run once per project, on the first environment (promotion order) only.
+const ONE_TIME_STAGES = ['arch', 'vms'];
+const emptyScans = () => ({ agent: null, pentest: null, cloud: null });
+const scanRequired = env => String(env.name).trim().toLowerCase() !== 'dev';
+const allScansDone = env => SCAN_TYPES.every(t => env.scans?.[t]);
 const DEFAULT_TEAM = { arch: 'devops', vms: 'infra', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
-const ENV_ORDER = ['dev', 'preprod', 'prod'];
+const ENV_ORDER = ['dev', 'rec', 'preprod', 'prod'];
 const envRank = name => {
   const i = ENV_ORDER.indexOf(String(name).trim().toLowerCase());
   return i < 0 ? ENV_ORDER.length : i;
@@ -91,12 +100,13 @@ function seed() {
     {
       id: uid(),
       name: 'Cartographie Apps',
-      dns: 'cartographie.um6p.ma',
+      dns: '',
       owner: { name: 'C. Ibnsina', title: 'IT Project Manager' },
       environments: [
         {
           id: uid(),
           name: 'dev',
+          dns: 'cartographie-dev.um6p.ma',
           vms: [{ id: uid(), role: 'all-in-one', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' }],
           stage: 'live',
           team: 'owner',
@@ -112,15 +122,15 @@ function seed() {
         {
           id: uid(),
           name: 'prod',
+          dns: 'cartographie.um6p.ma',
           vms: [
             { id: uid(), role: 'app server', count: 2, vcpu: 4, ramGb: 8, diskGb: 80, os: 'Ubuntu 24.04' },
             { id: uid(), role: 'db', count: 1, vcpu: 4, ramGb: 16, diskGb: 200, os: 'Ubuntu 24.04' },
           ],
           stage: 'scan',
           team: 'cybersec',
+          // arch & vms are one-time tasks — they ran on dev, so prod starts at deploy
           history: [
-            { stage: 'arch', team: 'devops', enteredAt: h(9) },
-            { stage: 'vms', team: 'infra', enteredAt: h(8) },
             { stage: 'deploy', team: 'owner', enteredAt: h(7) },
             { stage: 'scan', team: 'cybersec', enteredAt: h(3) },
           ],
@@ -135,12 +145,13 @@ function seed() {
     {
       id: uid(),
       name: 'HR Portal',
-      dns: 'hr.um6p.ma',
+      dns: '',
       owner: { name: 'S. Alaoui', title: 'HR Director' },
       environments: [
         {
           id: uid(),
           name: 'preprod',
+          dns: 'hr-preprod.um6p.ma',
           vms: [{ id: uid(), role: 'app server', count: 1, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }],
           stage: 'vms',
           team: 'infra',
@@ -152,6 +163,7 @@ function seed() {
         {
           id: uid(),
           name: 'prod',
+          dns: 'hr.um6p.ma',
           vms: [{ id: uid(), role: 'app server', count: 2, vcpu: 8, ramGb: 16, diskGb: 120, os: 'RHEL 9' }],
           stage: null,
           team: null,
@@ -175,6 +187,16 @@ function migrate(list) {
       if (!('history' in e)) e.history = [];
       if (!('stage' in e)) e.stage = null;
       if (!('team' in e)) e.team = null;
+      if (typeof e.dns !== 'string') e.dns = '';
+      if (!e.scans || typeof e.scans !== 'object') e.scans = emptyScans();
+      else for (const t of SCAN_TYPES) if (!(t in e.scans)) e.scans[t] = null;
+    }
+    // DNS is per-environment now — fold a legacy project-wide dns onto the prod
+    // env (else the last env in promotion order) when no env has one yet.
+    if (p.dns && envs.length && !envs.some(e => e.dns)) {
+      const ordered = [...envs].sort((a, b) => envRank(a.name) - envRank(b.name));
+      const target = ordered.find(e => String(e.name).trim().toLowerCase() === 'prod') ?? ordered[ordered.length - 1];
+      target.dns = String(p.dns).trim();
     }
     // fold a legacy project-level pipeline into the first env (by promotion order)
     if ('stage' in p || 'history' in p) {
@@ -204,7 +226,7 @@ try {
   projects = migrate(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')));
   persist();
 } catch {
-  projects = seed();
+  projects = migrate(seed());
   persist();
 }
 
@@ -280,14 +302,27 @@ app.delete('/api/keys/:id', requireKey, (req, res) => {
   res.status(204).end();
 });
 
+function normalizeScans(s) {
+  const out = emptyScans();
+  for (const t of SCAN_TYPES) {
+    const v = s?.[t];
+    if (v && typeof v === 'object' && v.at) {
+      out[t] = { at: String(v.at), ...(v.by ? { by: String(v.by) } : {}), ...(v.note ? { note: String(v.note) } : {}) };
+    }
+  }
+  return out;
+}
+
 function normalizeEnv(e) {
   return {
     id: e?.id ?? uid(),
     name: String(e?.name ?? 'env'),
+    dns: typeof e?.dns === 'string' ? e.dns.trim() : '',
     vms: Array.isArray(e?.vms) ? e.vms : [],
     stage: STAGES.includes(e?.stage) ? e.stage : null,
     team: TEAMS.includes(e?.team) ? e.team : null,
     history: Array.isArray(e?.history) ? e.history : [],
+    scans: normalizeScans(e?.scans),
   };
 }
 
@@ -315,7 +350,9 @@ app.post('/api/projects', requireKey, (req, res) => {
 app.put('/api/projects/:id', requireKey, (req, res) => {
   const i = projects.findIndex(x => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'not found' });
-  projects[i] = { ...req.body, id: req.params.id };
+  const b = req.body ?? {};
+  const envs = Array.isArray(b.environments) ? b.environments.map(normalizeEnv) : projects[i].environments;
+  projects[i] = { ...b, id: req.params.id, environments: envs };
   persist();
   broadcastProjects();
   res.json(projects[i]);
@@ -352,14 +389,89 @@ app.patch('/api/projects/:id/status', requireKey, (req, res) => {
   if (!envUnlockedSrv(p, env)) {
     return res.status(409).json({ error: 'previous environment must be live before this one can start' });
   }
+  // Architecture & VM creation are one-time tasks — only the first environment
+  // (promotion order) runs them.
+  const firstEnv = orderedEnvsSrv(p)[0];
+  if (ONE_TIME_STAGES.includes(stage) && firstEnv && firstEnv.id !== env.id) {
+    return res.status(409).json({ error: `'${stage}' is a one-time task handled on the first environment (${firstEnv.name})` });
+  }
+  // Gate: can't move past the security scan until all three sub-scans pass
+  // (dev is exempt). "Past scan" = leaving scan for a later stage.
+  const leavingScan = env.stage === 'scan' && STAGES.indexOf(stage) > STAGES.indexOf('scan');
+  if (leavingScan && scanRequired(env) && !allScansDone(env)) {
+    const pending = SCAN_TYPES.filter(x => !env.scans?.[x]);
+    return res.status(409).json({ error: `security scans incomplete: ${pending.join(', ')} must pass before leaving the scan stage` });
+  }
   const t = TEAMS.includes(team) ? team : DEFAULT_TEAM[stage];
   const by = req.user?.name ?? req.keyInfo?.name ?? null;
+  // Moving back to the scan stage (or earlier) from beyond it voids the scans:
+  // they must be re-validated. The log entry keeps the trace of what had passed.
+  const scanIdx = STAGES.indexOf('scan');
+  const movedBackPastScan = env.stage != null
+    && STAGES.indexOf(env.stage) > scanIdx
+    && STAGES.indexOf(stage) <= scanIdx;
+  if (movedBackPastScan && SCAN_TYPES.some(x => env.scans?.[x])) {
+    const voided = SCAN_TYPES.filter(x => env.scans?.[x]).map(x => SCAN_LABELS[x]);
+    env.scans = emptyScans();
+    env.history.push({
+      kind: 'scan',
+      stage: 'scan',
+      team: 'cybersec',
+      enteredAt: new Date().toISOString(),
+      note: `Scans reset (${voided.join(', ')}) — pipeline moved back, all scans must be re-validated`,
+      ...(by ? { by } : {}),
+    });
+  }
   const entry = { stage, team: t, enteredAt: new Date().toISOString() };
   if (typeof note === 'string' && note.trim()) entry.note = note.trim().slice(0, 500);
   if (by) entry.by = by;
   env.stage = stage;
   env.team = t;
   env.history.push(entry);
+  persist();
+  broadcastProjects();
+  res.json(p);
+});
+
+// Mark one of an environment's sub-scans (agent | pentest | cloud) done or not.
+// Body: { envId, scanType, done, note? }.
+app.patch('/api/projects/:id/scan', requireKey, (req, res) => {
+  const p = projects.find(x => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: 'not found' });
+  const { envId, scanType, done, note } = req.body ?? {};
+  const env = p.environments.find(e => e.id === envId);
+  if (!env) {
+    return res.status(400).json({ error: 'envId is required and must match an environment' });
+  }
+  if (!SCAN_TYPES.includes(scanType)) {
+    return res.status(400).json({ error: `scanType must be one of: ${SCAN_TYPES.join(', ')}` });
+  }
+  if (!env.scans) env.scans = emptyScans();
+  const by = req.user?.name ?? req.keyInfo?.name ?? null;
+  const userNote = typeof note === 'string' && note.trim() ? note.trim().slice(0, 500) : null;
+  // Every actual toggle is logged to the env history (kind: 'scan') so the
+  // activity tab keeps a trace even after scans are reset. No-ops don't log.
+  const logScan = text => env.history.push({
+    kind: 'scan',
+    stage: 'scan',
+    team: 'cybersec',
+    enteredAt: new Date().toISOString(),
+    note: userNote ? `${text} — “${userNote}”` : text,
+    ...(by ? { by } : {}),
+  });
+  if (done === false) {
+    if (env.scans[scanType]) {
+      env.scans[scanType] = null;
+      logScan(`${SCAN_LABELS[scanType]} unchecked — to be re-validated`);
+    }
+  } else if (!env.scans[scanType]) {
+    env.scans[scanType] = {
+      at: new Date().toISOString(),
+      ...(by ? { by } : {}),
+      ...(userNote ? { note: userNote } : {}),
+    };
+    logScan(`${SCAN_LABELS[scanType]} marked as passed`);
+  }
   persist();
   broadcastProjects();
   res.json(p);
@@ -390,6 +502,17 @@ if (PROD && fs.existsSync(dist)) {
 
 /* ---------- websocket: presence + live updates ---------- */
 const server = createServer(app);
+// Registered BEFORE the WebSocketServer attaches: ws re-emits http server
+// errors on itself (unhandled → crash), so this must be the first listener
+// for the friendly message to win.
+server.on('error', err => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use — another Relay server is probably running.`);
+    console.error(`Stop it first (pkill -f server/server.mjs) or start this one on another port: RELAY_PORT=5182 npm start`);
+    process.exit(1);
+  }
+  throw err;
+});
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 const clients = new Map(); // ws -> {id, name}

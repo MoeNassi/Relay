@@ -2,6 +2,28 @@ export type StageKey = 'arch' | 'vms' | 'deploy' | 'scan' | 'publication' | 'liv
 
 export type Team = 'devops' | 'infra' | 'network' | 'cybersec' | 'owner';
 
+/** The three security scans that run under the `scan` stage. */
+export type ScanType = 'agent' | 'pentest' | 'cloud';
+
+export const SCAN_TYPES: ScanType[] = ['agent', 'pentest', 'cloud'];
+
+export const SCAN_LABELS: Record<ScanType, string> = {
+  agent: 'Agent scan',
+  pentest: 'Penetration test',
+  cloud: 'Cloud scan',
+};
+
+/** A completed sub-scan; null/absent means still outstanding. */
+export interface ScanResult {
+  at: string;      // ISO completion time
+  by?: string;     // who marked it done
+  note?: string;
+}
+
+export type ScanState = Record<ScanType, ScanResult | null>;
+
+export const emptyScans = (): ScanState => ({ agent: null, pentest: null, cloud: null });
+
 export interface StageDef {
   key: StageKey;
   label: string;
@@ -15,9 +37,9 @@ export interface StageDef {
 /** The procedure every environment runs through, in order. */
 export const STAGES: StageDef[] = [
   { key: 'arch',        label: 'Architecture & spec check', shortLabel: 'Arch',    defaultTeam: 'devops',   slaHours: 48 },
-  { key: 'vms',         label: 'VM creation',               shortLabel: 'VMs',     defaultTeam: 'infra',    slaHours: 120 },
+  { key: 'vms',         label: 'VM creation',               shortLabel: 'VMs',     defaultTeam: 'infra',    slaHours: 48 },
   { key: 'deploy',      label: 'Development & deployment',   shortLabel: 'Deploy',  defaultTeam: 'owner',    slaHours: null },
-  { key: 'scan',        label: 'Security scan',             shortLabel: 'Scan',    defaultTeam: 'cybersec', slaHours: 168 },
+  { key: 'scan',        label: 'Security scan',             shortLabel: 'Scan',    defaultTeam: 'cybersec', slaHours: 120 },
   { key: 'publication', label: 'URL publication',           shortLabel: 'Publish', defaultTeam: 'network',  slaHours: 48 },
   { key: 'live',        label: 'Live in production',        shortLabel: 'Live',    defaultTeam: 'owner',    slaHours: null },
 ];
@@ -33,7 +55,7 @@ export const TEAM_LABELS: Record<Team, string> = {
 };
 
 /** Promotion order. Known envs rank first in this order; unknowns fall to the end. */
-export const ENV_ORDER = ['dev', 'preprod', 'prod'];
+export const ENV_ORDER = ['dev', 'rec', 'preprod', 'prod'];
 export function envRank(name: string): number {
   const i = ENV_ORDER.indexOf(name.trim().toLowerCase());
   return i < 0 ? ENV_ORDER.length : i;
@@ -55,16 +77,26 @@ export interface HistoryEntry {
   enteredAt: string; // ISO
   note?: string;     // optional comment captured at the status change
   by?: string;       // who made the change (user name or agent key name)
+  /**
+   * 'scan' entries are informational logs (scan passed/unchecked/reset) kept
+   * for traceability — they are excluded from SLA/duration math. Absent or
+   * 'status' means a real stage transition.
+   */
+  kind?: 'status' | 'scan';
 }
 
 export interface Environment {
   id: string;
-  name: string; // dev | preprod | prod | custom
+  name: string; // dev | rec | preprod | prod | custom
+  /** DNS published for THIS environment (e.g. app-dev.um6p.ma vs app.um6p.ma). */
+  dns?: string;
   vms: VmSpec[];
   /** Pipeline state for THIS environment. null/empty = not started yet. */
   stage: StageKey | null;
   team: Team | null;
   history: HistoryEntry[];
+  /** Per-type security scans tracked under the `scan` stage. */
+  scans: ScanState;
 }
 
 export interface FlowRule {
@@ -80,6 +112,7 @@ export interface FlowRule {
 export interface Project {
   id: string;
   name: string;
+  /** Legacy project-wide DNS — superseded by per-environment `dns`; kept for old data. */
   dns: string;
   owner: { name: string; title: string };
   environments: Environment[];
@@ -101,7 +134,51 @@ export function orderedEnvs(p: Project): Environment[] {
 }
 
 export const envStarted = (e: Environment) => e.history.length > 0;
+/** DNS to show for an env — its own, falling back to the legacy project-wide one. */
+export const envDns = (p: Project, e: Environment) => (e.dns?.trim() || p.dns || '').trim();
 export const envLive = (e: Environment) => e.stage === 'live';
+export const isProdEnv = (e: Environment) => e.name.trim().toLowerCase() === 'prod';
+
+/** One-time tasks: run once for the whole project, on the first environment only. */
+export const ONE_TIME_STAGES: StageKey[] = ['arch', 'vms'];
+
+/**
+ * The stages THIS environment actually runs. Architecture & spec check and VM
+ * creation are one-time tasks carried only by the first environment (promotion
+ * order). The terminal stage reads "Live in production" only on prod — every
+ * other environment simply completes.
+ */
+export function envStages(p: Project, env: Environment): StageDef[] {
+  const first = orderedEnvs(p)[0];
+  const isFirst = !!first && first.id === env.id;
+  return STAGES
+    .filter(s => isFirst || !ONE_TIME_STAGES.includes(s.key))
+    .map(s => s.key === 'live' && !isProdEnv(env)
+      ? { ...s, label: 'Completed', shortLabel: 'Done' }
+      : s);
+}
+
+/** First stage this environment starts at ('arch' for the first env, 'deploy' after). */
+export const envFirstStage = (p: Project, env: Environment): StageKey =>
+  envStages(p, env)[0].key;
+
+/** Stage def as it applies to this env (label overrides), falling back to the global def. */
+export const envStageDef = (p: Project, env: Environment, key: StageKey): StageDef =>
+  envStages(p, env).find(s => s.key === key) ?? stageDef(key);
+
+/**
+ * Whether the three security scans are mandatory for this environment. Every
+ * environment must be scanned before publication EXCEPT `dev`, which is exempt.
+ */
+export const scanRequired = (e: Environment) => e.name.trim().toLowerCase() !== 'dev';
+
+/** How many of the three sub-scans are complete. */
+export const scansDone = (e: Environment) =>
+  SCAN_TYPES.filter(t => e.scans?.[t]).length;
+
+/** True once every required sub-scan is complete (always true when not required). */
+export const scansSatisfied = (e: Environment) =>
+  !scanRequired(e) || scansDone(e) === SCAN_TYPES.length;
 
 /** An env can be started once the previous env in order is Live (first one is always open). */
 export function envUnlocked(p: Project, env: Environment): boolean {

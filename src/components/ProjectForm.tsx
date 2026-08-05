@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Project, Environment, FlowRule, VmSpec } from '../types';
+import { emptyScans } from '../types';
 import { uid } from '../store';
 
 interface Props {
@@ -10,12 +11,12 @@ interface Props {
 
 const blankVm = (): VmSpec => ({ id: uid(), role: '', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' });
 const blankEnv = (name = 'dev'): Environment =>
-  ({ id: uid(), name, vms: [blankVm()], stage: null, team: null, history: [] });
+  ({ id: uid(), name, dns: '', vms: [blankVm()], stage: null, team: null, history: [], scans: emptyScans() });
+const ENV_NAMES = ['dev', 'rec', 'preprod', 'prod'];
 const blankFlow = (): FlowRule => ({ id: uid(), source: '', destination: '', port: '', protocol: 'TCP', direction: 'outbound', note: '' });
 
 export function ProjectForm({ initial, onSave, onClose }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [dns, setDns] = useState(initial?.dns ?? '');
   const [ownerName, setOwnerName] = useState(initial?.owner.name ?? '');
   const [ownerTitle, setOwnerTitle] = useState(initial?.owner.title ?? '');
   const [envs, setEnvs] = useState<Environment[]>(initial?.environments ?? [blankEnv()]);
@@ -44,9 +45,10 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
       }))
       .filter(env => env.name.trim());
     const cleanFlows = flows.filter(f => f.destination.trim() || f.port.trim());
+    // dns is per-environment now; the project-level field is legacy and kept as-is
     const project: Project = initial
-      ? { ...initial, name, dns, owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows }
-      : { id: uid(), name, dns, owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows, createdAt: now };
+      ? { ...initial, name, owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows }
+      : { id: uid(), name, dns: '', owner: { name: ownerName, title: ownerTitle }, environments: cleanEnvs, flows: cleanFlows, createdAt: now };
     onSave(project);
   };
 
@@ -61,10 +63,6 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
             <div className="field">
               <label>Application name *</label>
               <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. HR Portal" />
-            </div>
-            <div className="field">
-              <label>DNS</label>
-              <input value={dns} onChange={e => setDns(e.target.value)} placeholder="app.um6p.ma" />
             </div>
           </div>
           <div className="row">
@@ -87,10 +85,16 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
                 <div className="field">
                   <label>Environment</label>
                   <select value={env.name} onChange={e => patchEnv(env.id, { name: e.target.value })}>
-                    <option>dev</option>
-                    <option>preprod</option>
-                    <option>prod</option>
+                    {ENV_NAMES.map(n => <option key={n}>{n}</option>)}
                   </select>
+                </div>
+                <div className="field">
+                  <label>DNS ({env.name})</label>
+                  <input
+                    value={env.dns ?? ''}
+                    onChange={e => patchEnv(env.id, { dns: e.target.value })}
+                    placeholder={env.name === 'prod' ? 'app.um6p.ma' : `app-${env.name}.um6p.ma`}
+                  />
                 </div>
                 <button type="button" className="btn sm ghost danger" style={{ marginLeft: 'auto' }}
                   onClick={() => setEnvs(es => es.filter(e => e.id !== env.id))}>
@@ -137,7 +141,10 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
               </button>
             </div>
           ))}
-          <button type="button" className="btn sm" onClick={() => setEnvs(es => [...es, blankEnv('preprod')])}>
+          <button type="button" className="btn sm" onClick={() => setEnvs(es => {
+            const next = ENV_NAMES.find(n => !es.some(e => e.name === n)) ?? 'preprod';
+            return [...es, blankEnv(next)];
+          })}>
             + Add environment
           </button>
         </div>

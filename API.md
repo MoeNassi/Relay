@@ -33,17 +33,46 @@ Key management endpoints (require any active key):
 | POST | `/api/projects` | key | create a project |
 | PUT | `/api/projects/:id` | key | replace a project |
 | PATCH | `/api/projects/:id/status` | key | change ONE environment's pipeline status |
+| PATCH | `/api/projects/:id/scan` | key | mark ONE sub-scan (agent/pentest/cloud) done |
 | DELETE | `/api/projects/:id` | key | delete |
 
 **Each environment runs its own pipeline.** A project has `environments[]`, and
 status changes target one environment by `envId`.
 
 Stages (per environment): `arch` → `vms` → `deploy` → `scan` → `publication` → `live`
-(`deploy` = development/deployment, no SLA clock).
+(`deploy` = development/deployment, no SLA clock). SLA targets: `arch` 48h, `vms` 48h
+(2 days), `scan` 120h (5 days), `publication` 48h.
+
+**One-time tasks.** `arch` (architecture & spec check) and `vms` (VM creation) run
+once per project, on the FIRST environment in promotion order only. Later
+environments start directly at `deploy`; setting them to `arch`/`vms` returns `409`.
+The terminal `live` stage means "Live in production" only for `prod` — for every
+other environment it simply marks the pipeline completed (the UI shows "Completed").
+
+**Security scans.** The `scan` stage runs three sub-scans — `agent`, `pentest`, `cloud`
+— tracked in each environment's `scans` object. All three must pass before an
+environment can leave `scan` for `publication`, EXCEPT `dev`, which is exempt.
+Marking one done:
+
+```bash
+curl -s -X PATCH http://localhost:5181/api/projects/<id>/scan \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{ "envId": "<envId>", "scanType": "pentest", "done": true }'
+```
+
+Advancing a non-`dev` env past `scan` with any sub-scan outstanding returns `409`.
+Every scan check/uncheck is appended to the environment's `history` as an entry with
+`kind: "scan"` (informational — excluded from SLA math) so the activity log keeps a
+trace. Moving an environment BACK from beyond `scan` (e.g. `live` → `scan`) resets
+all sub-scans to outstanding — they must be re-validated — while the log entries remain.
 Teams (ball holder): `infra`, `network`, `cybersec`, `owner` — defaults to the stage's usual team if omitted.
-Promotion order is `dev → preprod → prod` (custom names last); an environment can only
+Promotion order is `dev → rec → preprod → prod` (custom names last); an environment can only
 change status once the previous one is `live` (otherwise `409`). Each change is appended to
 that environment's `history`, driving its per-stage SLA clocks.
+
+**DNS is per environment** — each entry in `environments[]` takes its own `dns`
+(e.g. `app-dev.um6p.ma` vs `app.um6p.ma`). The project-level `dns` field is legacy:
+on load it is folded onto the `prod` environment when no env has a DNS yet.
 
 ## Examples
 
@@ -54,12 +83,11 @@ curl -s -X POST http://localhost:5181/api/projects \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{
     "name": "Billing Service",
-    "dns": "billing.um6p.ma",
     "owner": { "name": "M. Idrissi", "title": "Finance IT Lead" },
     "environments": [
-      { "name": "preprod", "vms": [
+      { "name": "rec", "dns": "billing-rec.um6p.ma", "vms": [
         { "role": "app server", "count": 1, "vcpu": 4, "ramGb": 8, "diskGb": 80, "os": "Ubuntu 24.04" } ] },
-      { "name": "prod", "vms": [
+      { "name": "prod", "dns": "billing.um6p.ma", "vms": [
         { "role": "app server", "count": 2, "vcpu": 8, "ramGb": 16, "diskGb": 120, "os": "Ubuntu 24.04" } ] }
     ],
     "flows": [{ "source": "app server", "destination": "db", "port": "5432",

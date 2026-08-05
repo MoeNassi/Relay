@@ -20,6 +20,10 @@ services:
       - "5181:5181"
     environment:
       NODE_ENV: production
+      # SSO kill-switch — currently 1 (SSO OFF, browser signs in as the local
+      # dev user) while the app is in dev. Set RELAY_SSO_DISABLED=0 on the
+      # deploy host (or change the default below) to turn Microsoft SSO back on.
+      RELAY_SSO_DISABLED: ${RELAY_SSO_DISABLED:-1}
       # --- optional Microsoft Entra SSO (omit to disable) ---
       RELAY_SSO_TENANT_ID: ${RELAY_SSO_TENANT_ID:-}
       RELAY_SSO_CLIENT_ID: ${RELAY_SSO_CLIENT_ID:-}

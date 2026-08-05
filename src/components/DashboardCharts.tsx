@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { Project, Team } from '../types';
 import { TEAM_LABELS } from '../types';
-import { teamDurations, slaStatus, formatDuration } from '../store';
+import { projectTeamSla, slaStatus, formatDuration } from '../store';
 import { envStarted, envLive } from '../types';
 
 const TEAM_COLOR: Record<Team, string> = {
@@ -14,14 +14,19 @@ const TEAM_COLOR: Record<Team, string> = {
 
 /** Dashboard monitoring: SLA health of in-flight envs + time spent per team. */
 export function DashboardCharts({ projects }: { projects: Project[] }) {
-  const { teams, slowest, health, inFlight } = useMemo(() => {
-    const totals: Partial<Record<Team, number>> = {};
+  const { teams, worst, health, inFlight } = useMemo(() => {
+    // same math as the per-project "Team SLA" breakdown, summed across projects
+    const totals: Partial<Record<Team, { ms: number; slaMs: number }>> = {};
     const health = { ok: 0, warn: 0, over: 0 };
     let inFlight = 0;
     for (const p of projects) {
+      for (const t of projectTeamSla(p)) {
+        const cur = totals[t.team] ?? { ms: 0, slaMs: 0 };
+        cur.ms += t.ms;
+        cur.slaMs += t.slaMs;
+        totals[t.team] = cur;
+      }
       for (const env of p.environments) {
-        const td = teamDurations(env);
-        for (const k of Object.keys(td) as Team[]) totals[k] = (totals[k] ?? 0) + (td[k] ?? 0);
         if (envStarted(env) && !envLive(env)) {
           const s = slaStatus(env);
           if (s) {
@@ -34,10 +39,13 @@ export function DashboardCharts({ projects }: { projects: Project[] }) {
       }
     }
     const teams = (Object.keys(totals) as Team[])
-      .map(t => ({ team: t, ms: totals[t] ?? 0 }))
+      .map(t => {
+        const { ms, slaMs } = totals[t]!;
+        return { team: t, ms, slaMs, over: ms > slaMs, overBy: Math.max(0, ms - slaMs) };
+      })
       .filter(x => x.ms > 0)
-      .sort((a, b) => b.ms - a.ms);
-    return { teams, slowest: teams[0], health, inFlight };
+      .sort((a, b) => b.overBy - a.overBy || b.ms - a.ms);
+    return { teams, worst: teams.find(t => t.over) ?? null, health, inFlight };
   }, [projects]);
 
   const maxMs = Math.max(1, ...teams.map(t => t.ms));
@@ -69,23 +77,28 @@ export function DashboardCharts({ projects }: { projects: Project[] }) {
       {/* ---- time spent per team (the bottleneck) ---- */}
       <div className="card chart-card">
         <h2>
-          Time by team
+          Time by team vs SLA
           <span className="hint">
-            {slowest ? <>slowest: <b>{TEAM_LABELS[slowest.team]}</b> ({formatDuration(slowest.ms)})</> : 'handling time across all projects'}
+            {worst
+              ? <>most delayed: <b>{TEAM_LABELS[worst.team]}</b> (over by {formatDuration(worst.overBy)})</>
+              : teams.length ? 'all teams within their SLA targets' : 'handling time across all projects'}
           </span>
         </h2>
         {teams.length ? (
           <div className="team-bars">
-            {teams.map(({ team, ms }, i) => (
+            {teams.map(({ team, ms, slaMs, over, overBy }) => (
               <div className="team-bar-row" key={team}>
                 <span className="team-bar-label">{TEAM_LABELS[team]}</span>
                 <div className="team-bar-track">
                   <span
-                    className={`team-bar-fill ${i === 0 ? 'lead' : ''}`}
+                    className={`team-bar-fill ${over ? 'lead' : ''}`}
                     style={{ width: `${(ms / maxMs) * 100}%`, background: TEAM_COLOR[team] }}
                   />
                 </div>
-                <span className="team-bar-val">{formatDuration(ms)}</span>
+                <span className="team-bar-val">
+                  {formatDuration(ms)} / {formatDuration(slaMs)}
+                  {over && <span className="team-bar-flag">+{formatDuration(overBy)}</span>}
+                </span>
               </div>
             ))}
           </div>

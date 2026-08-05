@@ -3,12 +3,12 @@ import { stageDef, TEAM_LABELS } from '../types';
 import { slaStatus, formatDuration } from '../store';
 import { ServerIcon, ShieldIcon, UserIcon, NetworkIcon, CodeIcon } from './icons';
 
-export function StageBadge({ stage }: { stage: StageKey | null }) {
+export function StageBadge({ stage, label }: { stage: StageKey | null; label?: string }) {
   if (!stage) return <span className="badge b-none"><span className="dot" />Not started</span>;
   return (
     <span className={`badge b-${stage}`}>
       <span className="dot" />
-      {stageDef(stage).shortLabel}
+      {label ?? stageDef(stage).shortLabel}
     </span>
   );
 }

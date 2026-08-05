@@ -22,8 +22,12 @@ const REDIRECT_URI   = process.env.RELAY_SSO_REDIRECT_URI || '';
 const ALLOWED_DOMAIN = (process.env.RELAY_SSO_ALLOWED_DOMAIN || '').trim().toLowerCase();
 const SECURE         = process.env.RELAY_SSO_SECURE === '1';
 const SCOPE          = 'openid profile email';
+// Kill-switch: RELAY_SSO_DISABLED=1 forces SSO off even when the four SSO vars
+// are present (e.g. injected by the deploy environment). Lets dev deployments
+// run open without stripping credentials from the host.
+const DISABLED       = process.env.RELAY_SSO_DISABLED === '1';
 
-export const SSO_ENABLED = Boolean(TENANT && CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);
+export const SSO_ENABLED = !DISABLED && Boolean(TENANT && CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);
 
 const AUTHORITY = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0`;
 const ISSUER    = `https://login.microsoftonline.com/${TENANT}/v2.0`;
