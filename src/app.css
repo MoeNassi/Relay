@@ -155,6 +155,8 @@
 .stage-dot { width: 8px; height: 8px; border-radius: 50%; }
 .d-arch { background: var(--r-text-secondary); }
 .d-vms { background: var(--r-brand); }
+.d-gitlab { background: #e2492f; }
+.d-pipeline { background: #0d9488; }
 .d-deploy { background: #6b7280; }
 .d-scan { background: var(--r-violet); }
 .d-publication { background: var(--r-amber); }
@@ -386,6 +388,8 @@
 .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .badge.b-arch { color: var(--r-text-secondary); background: var(--r-bg-hover); }
 .badge.b-vms { color: var(--r-brand); background: var(--r-brand-soft); }
+.badge.b-gitlab { color: #e2492f; background: rgba(226, 73, 47, 0.1); }
+.badge.b-pipeline { color: #0d9488; background: rgba(13, 148, 136, 0.1); }
 .badge.b-deploy { color: #6b7280; background: var(--r-bg-hover); }
 .badge.b-scan { color: var(--r-violet); background: var(--r-violet-soft); }
 .badge.b-publication { color: var(--r-amber); background: var(--r-amber-soft); }

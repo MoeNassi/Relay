@@ -16,19 +16,19 @@ const PORT = process.env.RELAY_PORT ?? 5181;
 // In production, disable and put the UI behind SSO instead.
 const DEV_MODE = process.env.RELAY_DEV !== '0';
 
-const STAGES = ['arch', 'vms', 'deploy', 'scan', 'publication', 'live'];
+const STAGES = ['arch', 'vms', 'gitlab', 'pipeline', 'deploy', 'publication', 'scan', 'live'];
 const FIRST_STAGE = STAGES[0];
 const TEAMS = ['devops', 'infra', 'network', 'cybersec', 'owner'];
 // Security scans that run under the `scan` stage. Every env must pass all three
-// before publication EXCEPT `dev`, which is exempt.
+// before going live EXCEPT `dev`, which is exempt.
 const SCAN_TYPES = ['agent', 'pentest', 'cloud'];
 const SCAN_LABELS = { agent: 'Agent scan', pentest: 'Penetration test', cloud: 'Cloud scan' };
 // One-time tasks: run once per project, on the first environment (promotion order) only.
-const ONE_TIME_STAGES = ['arch', 'vms'];
+const ONE_TIME_STAGES = ['arch', 'vms', 'gitlab', 'pipeline'];
 const emptyScans = () => ({ agent: null, pentest: null, cloud: null });
 const scanRequired = env => String(env.name).trim().toLowerCase() !== 'dev';
 const allScansDone = env => SCAN_TYPES.every(t => env.scans?.[t]);
-const DEFAULT_TEAM = { arch: 'devops', vms: 'infra', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
+const DEFAULT_TEAM = { arch: 'devops', vms: 'infra', gitlab: 'devops', pipeline: 'devops', deploy: 'owner', scan: 'cybersec', publication: 'network', live: 'owner' };
 const ENV_ORDER = ['dev', 'rec', 'preprod', 'prod'];
 const envRank = name => {
   const i = ENV_ORDER.indexOf(String(name).trim().toLowerCase());
@@ -113,9 +113,11 @@ function seed() {
           history: [
             { stage: 'arch', team: 'devops', enteredAt: h(20) },
             { stage: 'vms', team: 'infra', enteredAt: h(19) },
+            { stage: 'gitlab', team: 'devops', enteredAt: h(18.6) },
+            { stage: 'pipeline', team: 'devops', enteredAt: h(18.3) },
             { stage: 'deploy', team: 'owner', enteredAt: h(18) },
-            { stage: 'scan', team: 'cybersec', enteredAt: h(12) },
-            { stage: 'publication', team: 'network', enteredAt: h(11) },
+            { stage: 'publication', team: 'network', enteredAt: h(12) },
+            { stage: 'scan', team: 'cybersec', enteredAt: h(11) },
             { stage: 'live', team: 'owner', enteredAt: h(10) },
           ],
         },
@@ -132,6 +134,7 @@ function seed() {
           // arch & vms are one-time tasks — they ran on dev, so prod starts at deploy
           history: [
             { stage: 'deploy', team: 'owner', enteredAt: h(7) },
+            { stage: 'publication', team: 'network', enteredAt: h(4) },
             { stage: 'scan', team: 'cybersec', enteredAt: h(3) },
           ],
         },

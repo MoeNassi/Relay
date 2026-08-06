@@ -1,5 +1,7 @@
 # ---- build stage: compile the React UI ----
-FROM node:20-alpine AS build
+# Base image comes from AWS's public mirror of Docker Hub — same image, but not
+# subject to Docker Hub's per-IP anonymous pull limits (429s on shared NAT).
+FROM public.ecr.aws/docker/library/node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -7,7 +9,7 @@ COPY . .
 RUN npm run build
 
 # ---- runtime stage: server + built UI, prod deps only ----
-FROM node:20-alpine
+FROM public.ecr.aws/docker/library/node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* ./

@@ -1,11 +1,27 @@
 stages: [deploy]
 
-deploy-prod:
+# Preprod: every push to relay-fixes deploys on the runner tagged
+# `relay-preprod` (mnassi's machine) — port 5181, SSO off by default.
+deploy-preprod:
   stage: deploy
   tags: [relay-preprod]
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "relay-fixes"'
+  variables:
+    COMPOSE_PROJECT_NAME: relay-preprod
+  script:
+    - docker compose up -d --build --remove-orphans
+    - docker image prune -f
+    - docker compose ps
+
+# Prod: merges to main deploy on the runner tagged `relay-prod`
+# (the production server). Set RELAY_SSO_DISABLED=0 + the RELAY_SSO_* vars
+# in that host's .env (or GitLab CI/CD variables) to turn SSO on.
+deploy-prod:
+  stage: deploy
+  tags: [relay-prod]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   variables:
     COMPOSE_PROJECT_NAME: relay
   script:

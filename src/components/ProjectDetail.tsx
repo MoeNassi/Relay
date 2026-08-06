@@ -193,8 +193,8 @@ function EnvPanel({
 
   const stages = stageBreakdown(env, envStageList);
   const next = nextStage(env, envStageList);
-  // At the scan stage, advancing to publication is blocked until every required
-  // sub-scan passes (dev is exempt). Mirrors the server-side 409 guard.
+  // At the scan stage, going live is blocked until every required sub-scan
+  // passes (dev is exempt). Mirrors the server-side 409 guard.
   const scanGate = env.stage === 'scan' && !scansSatisfied(env);
   const sla = slaStatus(env);
   const total = totalElapsed(env);
@@ -275,7 +275,7 @@ function EnvPanel({
             Security scans
             <span className="hint">
               {scanRequired(env)
-                ? `${scansDone(env)}/${SCAN_TYPES.length} passed — all required before publication`
+                ? `${scansDone(env)}/${SCAN_TYPES.length} passed — all required before go-live`
                 : `${env.name} is exempt — scans optional`}
             </span>
           </h2>
@@ -303,7 +303,7 @@ function EnvPanel({
           </div>
           {scanGate && (
             <div className="scan-gate-note">
-              🔒 Publication is blocked until all three scans pass.
+              🔒 Going live is blocked until all three scans pass.
             </div>
           )}
         </div>

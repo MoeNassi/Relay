@@ -39,19 +39,21 @@ Key management endpoints (require any active key):
 **Each environment runs its own pipeline.** A project has `environments[]`, and
 status changes target one environment by `envId`.
 
-Stages (per environment): `arch` → `vms` → `deploy` → `scan` → `publication` → `live`
-(`deploy` = development/deployment, no SLA clock). SLA targets: `arch` 48h, `vms` 48h
-(2 days), `scan` 120h (5 days), `publication` 48h.
+Stages (per environment): `arch` → `vms` → `gitlab` → `pipeline` → `deploy` →
+`publication` → `scan` → `live` (`deploy` = development/deployment, no SLA clock).
+SLA targets: `arch` 48h, `vms` 48h, `gitlab` 48h, `pipeline` 48h, `publication` 48h,
+`scan` 120h (5 days).
 
-**One-time tasks.** `arch` (architecture & spec check) and `vms` (VM creation) run
-once per project, on the FIRST environment in promotion order only. Later
-environments start directly at `deploy`; setting them to `arch`/`vms` returns `409`.
+**One-time tasks.** `arch` (architecture & spec check), `vms` (VM creation),
+`gitlab` (GitLab access) and `pipeline` (CI/CD pipeline check) run once per
+project, on the FIRST environment in promotion order only. Later environments
+start directly at `deploy`; setting them to a one-time stage returns `409`.
 The terminal `live` stage means "Live in production" only for `prod` — for every
 other environment it simply marks the pipeline completed (the UI shows "Completed").
 
 **Security scans.** The `scan` stage runs three sub-scans — `agent`, `pentest`, `cloud`
 — tracked in each environment's `scans` object. All three must pass before an
-environment can leave `scan` for `publication`, EXCEPT `dev`, which is exempt.
+environment can leave `scan` for `live`, EXCEPT `dev`, which is exempt.
 Marking one done:
 
 ```bash

@@ -1,4 +1,4 @@
-export type StageKey = 'arch' | 'vms' | 'deploy' | 'scan' | 'publication' | 'live';
+export type StageKey = 'arch' | 'vms' | 'gitlab' | 'pipeline' | 'deploy' | 'scan' | 'publication' | 'live';
 
 export type Team = 'devops' | 'infra' | 'network' | 'cybersec' | 'owner';
 
@@ -38,9 +38,11 @@ export interface StageDef {
 export const STAGES: StageDef[] = [
   { key: 'arch',        label: 'Architecture & spec check', shortLabel: 'Arch',    defaultTeam: 'devops',   slaHours: 48 },
   { key: 'vms',         label: 'VM creation',               shortLabel: 'VMs',     defaultTeam: 'infra',    slaHours: 48 },
+  { key: 'gitlab',      label: 'GitLab access',             shortLabel: 'GitLab',  defaultTeam: 'devops',   slaHours: 48 },
+  { key: 'pipeline',    label: 'CI/CD pipeline check',      shortLabel: 'Pipeline', defaultTeam: 'devops',  slaHours: 48 },
   { key: 'deploy',      label: 'Development & deployment',   shortLabel: 'Deploy',  defaultTeam: 'owner',    slaHours: null },
-  { key: 'scan',        label: 'Security scan',             shortLabel: 'Scan',    defaultTeam: 'cybersec', slaHours: 120 },
   { key: 'publication', label: 'URL publication',           shortLabel: 'Publish', defaultTeam: 'network',  slaHours: 48 },
+  { key: 'scan',        label: 'Security scan',             shortLabel: 'Scan',    defaultTeam: 'cybersec', slaHours: 120 },
   { key: 'live',        label: 'Live in production',        shortLabel: 'Live',    defaultTeam: 'owner',    slaHours: null },
 ];
 
@@ -140,7 +142,7 @@ export const envLive = (e: Environment) => e.stage === 'live';
 export const isProdEnv = (e: Environment) => e.name.trim().toLowerCase() === 'prod';
 
 /** One-time tasks: run once for the whole project, on the first environment only. */
-export const ONE_TIME_STAGES: StageKey[] = ['arch', 'vms'];
+export const ONE_TIME_STAGES: StageKey[] = ['arch', 'vms', 'gitlab', 'pipeline'];
 
 /**
  * The stages THIS environment actually runs. Architecture & spec check and VM
@@ -168,7 +170,7 @@ export const envStageDef = (p: Project, env: Environment, key: StageKey): StageD
 
 /**
  * Whether the three security scans are mandatory for this environment. Every
- * environment must be scanned before publication EXCEPT `dev`, which is exempt.
+ * environment must be scanned before going live EXCEPT `dev`, which is exempt.
  */
 export const scanRequired = (e: Environment) => e.name.trim().toLowerCase() !== 'dev';
 
