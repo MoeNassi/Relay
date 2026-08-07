@@ -29,3 +29,10 @@ shot.png
 .env
 .env.local
 !.env.example
+
+# Secrets / scratch — never commit auth cookies, scan output, or working notes
+cookies.txt
+*.gnmap
+*.nmap
+*.xml
+clauderesult.txt
