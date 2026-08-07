@@ -1,14 +1,14 @@
 stages: [deploy]
 
-# Preprod: every push to relay-fixes deploys on the runner tagged
-# `relay-preprod` (mnassi's machine) — port 5181, SSO off by default.
-deploy-preprod:
+# Dev: every push to relay-fixes deploys on the runner tagged `relay-dev`
+# (this local machine) — SSO off by default.
+deploy-dev:
   stage: deploy
-  tags: [relay-preprod]
+  tags: [relay-dev]
   rules:
     - if: '$CI_COMMIT_BRANCH == "relay-fixes"'
   variables:
-    COMPOSE_PROJECT_NAME: relay-preprod
+    COMPOSE_PROJECT_NAME: relay-dev
   script:
     - docker compose up -d --build --remove-orphans
     - docker image prune -f
