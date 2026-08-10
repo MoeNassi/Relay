@@ -20,18 +20,17 @@ services:
       - "5181:5181"
     environment:
       NODE_ENV: production
-      # --- SSO fully disabled for dev ---
-      # SSO is OFF: the four RELAY_SSO_* vars below are commented out, so
-      # SSO_ENABLED is false and the browser signs in as the local dev user
-      # (no login page). To re-enable Microsoft Entra SSO later, uncomment the
-      # block and set the values on the deploy host (or via GitLab CI/CD vars).
-      # RELAY_SSO_DISABLED: ${RELAY_SSO_DISABLED:-1}
-      # RELAY_SSO_TENANT_ID: ${RELAY_SSO_TENANT_ID:-}
-      # RELAY_SSO_CLIENT_ID: ${RELAY_SSO_CLIENT_ID:-}
-      # RELAY_SSO_CLIENT_SECRET: ${RELAY_SSO_CLIENT_SECRET:-}
-      # RELAY_SSO_REDIRECT_URI: ${RELAY_SSO_REDIRECT_URI:-}
-      # RELAY_SSO_ALLOWED_DOMAIN: ${RELAY_SSO_ALLOWED_DOMAIN:-um6p.ma}
-      # RELAY_SSO_SECURE: ${RELAY_SSO_SECURE:-1}
+      # SSO kill-switch — currently 1 (SSO OFF, browser signs in as the local
+      # dev user) while the app is in dev. Set RELAY_SSO_DISABLED=0 on the
+      # deploy host (or change the default below) to turn Microsoft SSO back on.
+      RELAY_SSO_DISABLED: ${RELAY_SSO_DISABLED:-1}
+      # --- optional Microsoft Entra SSO (omit to disable) ---
+      RELAY_SSO_TENANT_ID: ${RELAY_SSO_TENANT_ID:-}
+      RELAY_SSO_CLIENT_ID: ${RELAY_SSO_CLIENT_ID:-}
+      RELAY_SSO_CLIENT_SECRET: ${RELAY_SSO_CLIENT_SECRET:-}
+      RELAY_SSO_REDIRECT_URI: ${RELAY_SSO_REDIRECT_URI:-}
+      RELAY_SSO_ALLOWED_DOMAIN: ${RELAY_SSO_ALLOWED_DOMAIN:-um6p.ma}
+      RELAY_SSO_SECURE: ${RELAY_SSO_SECURE:-1}
     volumes:
       # persist projects.json + api-keys.json across restarts/rebuilds
       - relay-data:/app/server/data
