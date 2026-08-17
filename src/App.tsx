@@ -146,7 +146,6 @@ export default function App() {
           theme={theme}
           onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
           userName={auth.mode === 'sso' ? auth.user.name : guestName()}
-          devMode={auth.mode === 'dev'}
           onSignOut={logout}
         />
       ) : (

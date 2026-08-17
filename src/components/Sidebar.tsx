@@ -21,7 +21,6 @@ interface Props {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   userName: string;
-  devMode: boolean;
   onSignOut: () => void;
 }
 
@@ -37,7 +36,7 @@ function loadSections(): Record<string, boolean> {
 
 export function Sidebar({
   projects, filter, onFilter, search, onSearch, onNewProject, onCollapse,
-  settingsOpen, onSettings, theme, onToggleTheme, userName, devMode, onSignOut,
+  settingsOpen, onSettings, theme, onToggleTheme, userName, onSignOut,
 }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>(loadSections);
   const isOpen = (k: string) => open[k] ?? true;
@@ -61,7 +60,6 @@ export function Sidebar({
       <div className="workspace">
         <span className="logo">R</span>
         <span className="ws-name">Relay Workspace</span>
-        {devMode && <span className="dev-chip">DEV</span>}
         <span className="ws-avatar" title={`Signed in as ${userName}`}><UserIcon /></span>
       </div>
 
