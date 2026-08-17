@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Project, Environment, FlowRule, VmSpec } from '../types';
-import { emptyScans } from '../types';
+import { emptyScans, OS_OPTIONS } from '../types';
 import { uid } from '../store';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-const blankVm = (): VmSpec => ({ id: uid(), role: '', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu 24.04' });
+const blankVm = (): VmSpec => ({ id: uid(), role: '', count: 1, vcpu: 2, ramGb: 4, diskGb: 60, os: 'Ubuntu' });
 const blankEnv = (name = 'dev'): Environment =>
   ({ id: uid(), name, dns: '', vms: [blankVm()], stage: null, team: null, history: [], scans: emptyScans() });
 const ENV_NAMES = ['dev', 'rec', 'preprod', 'prod'];
@@ -126,7 +126,10 @@ export function ProjectForm({ initial, onSave, onClose }: Props) {
                     </div>
                     <div className="field">
                       <label>OS</label>
-                      <input value={vm.os} onChange={e => patchVm(env.id, vm.id, { os: e.target.value })} />
+                      <select value={vm.os} onChange={e => patchVm(env.id, vm.id, { os: e.target.value })}>
+                        {!OS_OPTIONS.includes(vm.os as typeof OS_OPTIONS[number]) && <option value={vm.os}>{vm.os}</option>}
+                        {OS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
                     </div>
                     <button type="button" className="rm" title="Remove VM"
                       onClick={() => patchEnv(env.id, { vms: env.vms.filter(v => v.id !== vm.id) })}>

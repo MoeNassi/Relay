@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { installAuthRoutes, currentUser, SSO_ENABLED } from './auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.RELAY_DATA_DIR ?? path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'projects.json');
 const KEY_FILE = path.join(DATA_DIR, 'api-key');
 const PORT = process.env.RELAY_PORT ?? 5181;
@@ -354,7 +354,16 @@ app.put('/api/projects/:id', requireKey, (req, res) => {
   const i = projects.findIndex(x => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'not found' });
   const b = req.body ?? {};
-  const envs = Array.isArray(b.environments) ? b.environments.map(normalizeEnv) : projects[i].environments;
+  // `vmProvision` is server-owned VMProv job bookkeeping: always carried over
+  // from the stored env (never from the client), else an edit mid-provision
+  // drops the job_id — the completion callback no longer matches and a retrigger
+  // double-provisions the VMs.
+  const prevEnvs = projects[i].environments;
+  const envs = (Array.isArray(b.environments) ? b.environments.map(normalizeEnv) : prevEnvs)
+    .map(e => {
+      const old = prevEnvs.find(x => x.id === e.id);
+      return old?.vmProvision ? { ...e, vmProvision: old.vmProvision } : e;
+    });
   projects[i] = { ...b, id: req.params.id, environments: envs };
   persist();
   broadcastProjects();
@@ -433,6 +442,9 @@ app.patch('/api/projects/:id/status', requireKey, (req, res) => {
   env.history.push(entry);
   persist();
   broadcastProjects();
+  // Entering `vms` is what triggers the VMProv submit (also re-entering it:
+  // that's the manual retry/reconcile path for errored or stuck envs).
+  if (stage === 'vms') setImmediate(vmTick);
   res.json(p);
 });
 
@@ -563,7 +575,369 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+/* ---------- VMProv auto-provision worker (optional) ----------
+ * Integrates with the UM6P VMProv agent (see vmprov-agent-integration.md).
+ *
+ * VMProv is ASYNCHRONOUS: when an env reaches `vms`, Relay POSTs a batch to
+ * `${VM_AGENT_URL}` (default https://vmprov.um6p.ma/api/agent/jobs) with a Bearer
+ * token. VMProv answers 202 ("accepted") — NOT "created" — provisions in the
+ * background, and later POSTs a single completion callback to VM_CALLBACK_URL.
+ * Relay advances the env only when that callback (or a status GET) reports the
+ * job Completed.
+ *
+ * Flow per env:            submit ──202──▶ [submitted] ──callback:Completed──▶ advance
+ *                                │409 (already submitted) ─▶ [submitted]
+ *                                └─error──▶ [error] ─(backoff)─▶ resubmit (same job_id)
+ * Fully event-driven — no background polling at Relay's volume (~3 projects/wk):
+ * a submit fires when an env is moved to `vms` (PATCH /status), plus one sweep
+ * at boot for anything a restart left pending. An errored env resubmits, and a
+ * stuck [submitted] env is reconciled with GET /api/agent/jobs/{id} (missed
+ * callback), when a human moves it to `vms` again — failures are meant to be
+ * seen and re-triggered, not silently self-healed. Every request is
+ * concurrency-capped, timed out, and fully wrapped so a failing agent can
+ * never crash or freeze the server.
+ *
+ * Disabled unless VM_AGENT_URL, VM_AGENT_TOKEN and VM_CALLBACK_URL are all set.
+ */
+const VM_AGENT_URL = process.env.RELAY_VM_AGENT_URL || 'https://vmprov.um6p.ma/api/agent/jobs';
+const VM_AGENT_TOKEN = process.env.RELAY_VM_AGENT_TOKEN ?? '';          // VMProv Bearer token
+const VM_CALLBACK_URL = process.env.RELAY_VM_CALLBACK_URL ?? '';        // must be a *.um6p.ma https URL
+const VM_CALLBACK_TOKEN = process.env.RELAY_VM_CALLBACK_TOKEN ?? '';    // shared secret echoed back on the callback
+const VM_SITE = process.env.RELAY_VM_SITE ?? '';                        // default vm_site (RABAT | BG | BGOLD | F2 | NRO1)
+const VM_REQUESTER = process.env.RELAY_VM_REQUESTER || 'IT-PRODUCTIONAPP@um6p.ma'; // requester email on every VM
+const VM_SUBMITTER = process.env.RELAY_VM_SUBMITTER || 'relay';
+const VM_NEXT_STAGE = STAGES.includes(process.env.RELAY_VM_NEXT_STAGE) ? process.env.RELAY_VM_NEXT_STAGE : 'gitlab';
+const VM_TIMEOUT_MS = Number(process.env.RELAY_VM_TIMEOUT_MS) || 30000;
+const VM_MAX_CONCURRENT = Number(process.env.RELAY_VM_MAX_CONCURRENT) || 4;
+const VM_RETRY_MS = Number(process.env.RELAY_VM_RETRY_MS) || 60000;     // backoff before resubmitting an errored env
+const VM_RECONCILE_MS = Number(process.env.RELAY_VM_RECONCILE_MS) || 300000; // recheck a stuck 'submitted' job
+
+const VM_ON = Boolean(VM_AGENT_URL && VM_AGENT_TOKEN && VM_CALLBACK_URL);
+
+// envIds with a VMProv request (submit or reconcile) in flight right now.
+const vmInFlight = new Set();
+
+// Relay env name -> VMProv vm_environment code.
+const VM_ENV_CODE = {
+  dev: 'DEV', rec: 'RECETTE', recette: 'RECETTE',
+  preprod: 'PRE-PROD', 'pre-prod': 'PRE-PROD', prod: 'PROD', poc: 'POC',
+};
+// Relay os string -> VMProv vm_type. RHEL & friends are unsupported → null.
+function vmType(os) {
+  const s = String(os ?? '').toLowerCase();
+  if (s.includes('ubuntu')) return 'UBUNTU';
+  if (s.includes('windows')) return s.includes('fr') ? 'WINDOWS-FR' : 'WINDOWS-EN';
+  return null;
+}
+const shortCode = (s, max) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, max);
+
+// Login from the owner's full name: first-name initial + last name, lowercased.
+// "Mohammed Nassi" -> "mnassi". Single-word names are used as-is.
+function vmLogin(fullName) {
+  const parts = String(fullName ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  const login = parts.length === 1 ? parts[0] : parts[0][0] + parts[parts.length - 1];
+  return login.replace(/[^a-z0-9]/g, '');
+}
+
+// Build the VMProv `vms[]` batch from a Relay environment, expanding each spec's
+// `count` into that many VMs. Returns {batch, errors}: a non-empty errors array
+// means the env can't be provisioned as-is and must not be submitted.
+function vmBuildBatch(project, env) {
+  const errors = [];
+  const environment = VM_ENV_CODE[String(env.name).trim().toLowerCase()];
+  if (!environment) errors.push(`env name '${env.name}' is not one of DEV/RECETTE/PRE-PROD/PROD/POC`);
+  const projectCode = shortCode(project.name, 8);
+  if (!projectCode) errors.push('cannot derive a project code (1-8 alnum) from the project name');
+  // Every VM gets the owner as its account (Ubuntu → linux_users, Windows → win_user).
+  const login = vmLogin(project.owner?.name);
+
+  const list = Array.isArray(env.vms) ? env.vms : [];
+  if (!list.length) errors.push('environment has no VMs defined');
+
+  const batch = [];
+  for (const v of list) {
+    const type = vmType(v.os);
+    if (!type) errors.push(`os '${v.os ?? ''}' is unsupported by VMProv (need Ubuntu or Windows)`);
+    const site = v.site ?? env.site ?? VM_SITE;
+    if (!site) errors.push(`no site for VM '${v.role ?? '?'}' (set RELAY_VM_SITE or a per-VM site)`);
+    const role = shortCode(v.role, 3);
+    if (!role) errors.push(`cannot derive a role code (1-3 alnum) from '${v.role ?? ''}'`);
+    const cpu = Number(v.vcpu);
+    const memory = Number(v.ramGb);
+    if (!cpu) errors.push(`vcpu missing/invalid for VM '${v.role ?? '?'}'`);
+    if (!memory) errors.push(`ramGb missing/invalid for VM '${v.role ?? '?'}'`);
+    if (errors.length) continue; // don't build partial specs once something's wrong
+
+    const count = Math.max(1, Number(v.count) || 1);
+    for (let i = 0; i < count; i++) {
+      const spec = {
+        site, type, environment, cpu, memory,
+        // Required server-side despite the doc's "recommended". Sent under both
+        // spellings: VMProv builds have flapped between accepting `project_label`
+        // and `vm_project_label`, and unknown keys are dropped harmlessly.
+        project: projectCode, role,
+        project_label: project.name, vm_project_label: project.name,
+        description: `${project.name} ${v.role ?? ''}`.trim().slice(0, 120),
+      };
+      if (v.diskGb) spec.partitions = type === 'UBUNTU' ? `/,${Number(v.diskGb)}` : `C,${Number(v.diskGb)}`;
+      if (VM_REQUESTER) spec.requester = VM_REQUESTER;
+      // Owner account: sudo on Linux, admin on Windows.
+      if (login) {
+        if (type === 'UBUNTU') spec.linux_users = `${login},1`;
+        else spec.win_user = `${login},1`;
+      }
+      batch.push(spec);
+    }
+  }
+  return { batch, errors };
+}
+
+// Advance an env one stage forward, mirroring the PATCH /status bookkeeping.
+function vmAdvance(env, stage, note) {
+  const team = DEFAULT_TEAM[stage] ?? null;
+  const entry = { stage, team, enteredAt: new Date().toISOString(), by: 'vmprov' };
+  if (note) entry.note = String(note).slice(0, 500);
+  env.stage = stage;
+  env.team = team;
+  env.history.push(entry);
+}
+
+// Keep only non-sensitive fields from a callback VM entry. The callback carries
+// CLEARTEXT initial passwords (linux_accounts) and Windows user config — those
+// MUST NOT be persisted to projects.json or broadcast to browsers.
+function vmScrub(v) {
+  return {
+    name: v?.name ?? v?.hostname ?? null,
+    status: v?.status ?? null,
+    vm_id: v?.vm_id ?? v?.vm_moref ?? null,
+    ip: v?.ip ?? null,
+    site: v?.site ?? null,
+    environment: v?.environment ?? null,
+    type: v?.type ?? null,
+    ...(v?.error ? { error: String(v.error).slice(0, 300) } : {}),
+  };
+}
+
+function vmFindByJobId(jobId) {
+  for (const p of projects) {
+    for (const env of p.environments) {
+      if (env.vmProvision?.jobId === jobId) return { project: p, env };
+    }
+  }
+  return null;
+}
+
+// Apply a VMProv job status (from the callback or a reconcile GET) to an env.
+function vmApplyStatus(project, env, data) {
+  const status = data?.status;
+  env.vmProvision.result = {
+    total: data?.total_requested ?? null,
+    successful: data?.successful ?? null,
+    failed: data?.failed ?? null,
+    vms: Array.isArray(data?.vms) ? data.vms.map(vmScrub) : [],
+  };
+  if (status === 'Completed') {
+    if (env.stage === 'vms') {
+      env.vmProvision.status = 'created';
+      vmAdvance(env, VM_NEXT_STAGE, `VMProv job ${data.job_id} completed — ${data.successful ?? '?'} VM(s) created`);
+      console.log(`[vmprov] ${project.name}/${env.name}: job ${data.job_id} Completed → advanced to ${VM_NEXT_STAGE}`);
+    } else {
+      env.vmProvision.status = 'created';
+    }
+  } else if (status === 'Failed' || status === 'PartiallyCompleted') {
+    env.vmProvision.status = 'failed';
+    env.vmProvision.lastError = `VMProv ${status}: ${data.failed ?? '?'}/${data.total_requested ?? '?'} VM(s) failed`;
+    console.error(`[vmprov] ${project.name}/${env.name}: job ${data.job_id} ${status} — left at 'vms'`);
+  }
+  // pending / InProgress / WaitingForAcceptance → leave as 'submitted'.
+}
+
+// Submit one env's batch to VMProv. Reuses the env's job_id across retries so a
+// lost 202 response doesn't double-provision (VMProv dedupes by job_id → 409,
+// which we treat as "already accepted"). Never throws; always frees its slot.
+async function vmSubmit(project, env) {
+  vmInFlight.add(env.id);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), VM_TIMEOUT_MS);
+  try {
+    const { batch, errors } = vmBuildBatch(project, env);
+    if (errors.length) {
+      env.vmProvision = {
+        ...(env.vmProvision ?? {}),
+        status: 'error',
+        attempts: (env.vmProvision?.attempts ?? 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        lastError: `cannot build VM spec: ${errors.join('; ')}`.slice(0, 300),
+      };
+      persist();
+      broadcastProjects();
+      console.error(`[vmprov] ${project.name}/${env.name}: ${env.vmProvision.lastError}`);
+      return;
+    }
+
+    const jobId = env.vmProvision?.jobId ?? `relay-${env.id}-${uid()}`;
+    env.vmProvision = {
+      ...(env.vmProvision ?? {}),
+      jobId,
+      status: 'submitting',
+      attempts: (env.vmProvision?.attempts ?? 0) + 1,
+      lastAttemptAt: new Date().toISOString(),
+      lastError: null,
+    };
+    persist();
+    broadcastProjects();
+
+    const res = await fetch(VM_AGENT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${VM_AGENT_TOKEN}`,
+      },
+      body: JSON.stringify({
+        job_id: jobId,
+        callback_url: VM_CALLBACK_URL,
+        ...(VM_CALLBACK_TOKEN ? { callback_auth_token: VM_CALLBACK_TOKEN } : {}),
+        submitter: VM_SUBMITTER,
+        vms: batch,
+      }),
+      signal: ac.signal,
+    });
+
+    // 202 = accepted; 409 = a batch with this job_id already exists (a prior
+    // submit landed) — both mean "it's queued, wait for the callback".
+    if (res.status === 202 || res.status === 409) {
+      env.vmProvision.status = 'submitted';
+      env.vmProvision.lastReconcileAt = new Date().toISOString();
+      console.log(`[vmprov] ${project.name}/${env.name}: job ${jobId} ${res.status === 409 ? 'already submitted' : 'accepted'} (${batch.length} VM[s]) — awaiting callback`);
+    } else {
+      const body = await res.text().catch(() => '');
+      throw new Error(`submit ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    }
+    persist();
+    broadcastProjects();
+  } catch (e) {
+    const msg = e?.name === 'AbortError' ? `timed out after ${VM_TIMEOUT_MS}ms` : String(e?.message ?? e);
+    if (env.vmProvision) {
+      env.vmProvision.status = 'error';
+      env.vmProvision.lastError = msg.slice(0, 300);
+    }
+    persist();
+    broadcastProjects();
+    console.error(`[vmprov] ${project.name}/${env.name}: submit failed — ${msg}`);
+  } finally {
+    clearTimeout(timer);
+    vmInFlight.delete(env.id);
+  }
+}
+
+// Safety net for a missed callback: GET the job status and apply it.
+async function vmReconcile(project, env) {
+  vmInFlight.add(env.id);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), VM_TIMEOUT_MS);
+  try {
+    env.vmProvision.lastReconcileAt = new Date().toISOString();
+    const jobId = env.vmProvision.jobId;
+    const url = `${VM_AGENT_URL.replace(/\/+$/, '')}/${encodeURIComponent(jobId)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${VM_AGENT_TOKEN}` },
+      signal: ac.signal,
+    });
+    if (res.status === 404) {
+      // VMProv has no record — our submit never really landed. Drop the job_id
+      // so the next tick resubmits with a fresh one.
+      env.vmProvision.status = 'error';
+      env.vmProvision.jobId = undefined;
+      env.vmProvision.lastError = 'VMProv has no record of the job — will resubmit';
+    } else if (res.ok) {
+      vmApplyStatus(project, env, await res.json());
+    }
+    persist();
+    broadcastProjects();
+  } catch {
+    // transient — leave as 'submitted' and try again next reconcile window
+  } finally {
+    clearTimeout(timer);
+    vmInFlight.delete(env.id);
+  }
+}
+
+const vmAge = ts => Date.now() - Date.parse(ts ?? 0);
+// Errored (or a submit left mid-flight by a restart) and past the backoff.
+function vmResubmitDue(vp) {
+  if (!vp) return true;
+  if (vp.status === 'error' || vp.status === 'submitting') {
+    const age = vmAge(vp.lastAttemptAt);
+    return Number.isNaN(age) ? true : age >= VM_RETRY_MS;
+  }
+  return false;
+}
+// A 'submitted' job we haven't heard back on within the reconcile window.
+function vmReconcileDue(vp) {
+  if (vp?.status !== 'submitted' || !vp.jobId) return false;
+  const age = vmAge(vp.lastReconcileAt ?? vp.lastAttemptAt);
+  return Number.isNaN(age) ? true : age >= VM_RECONCILE_MS;
+}
+
+// One sweep (boot, or an env moved to `vms`): submit fresh/errored envs and
+// reconcile stuck ones, up to the remaining concurrency budget. Cheap
+// synchronous scan; work runs detached.
+function vmTick() {
+  try {
+    if (!VM_ON) return;
+    let slots = VM_MAX_CONCURRENT - vmInFlight.size;
+    if (slots <= 0) return;
+    for (const p of projects) {
+      for (const env of p.environments) {
+        if (slots <= 0) return;
+        if (env.stage !== 'vms' || vmInFlight.has(env.id)) continue;
+        const vp = env.vmProvision;
+        if (!vp || vmResubmitDue(vp)) { slots--; vmSubmit(p, env); }
+        else if (vmReconcileDue(vp)) { slots--; vmReconcile(p, env); }
+      }
+    }
+  } catch (e) {
+    console.error('[vmprov] tick error:', e);
+  }
+}
+
+// Completion callback from VMProv. Authenticated by the shared callback token
+// (NOT a Relay API key), so it is registered outside requireKey. Must answer
+// 2xx quickly, else VMProv retries with exponential backoff.
+app.post('/vmprov/callback', (req, res) => {
+  if (VM_CALLBACK_TOKEN) {
+    const got = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    if (got !== VM_CALLBACK_TOKEN) return res.status(401).json({ error: 'invalid callback token' });
+  }
+  const data = req.body ?? {};
+  if (!data.job_id) return res.status(400).json({ error: 'job_id is required' });
+  const found = vmFindByJobId(data.job_id);
+  // Ack unknown jobs with 200 so VMProv stops retrying a job we no longer track.
+  if (!found) return res.status(200).json({ ok: true, note: 'no matching env' });
+  vmApplyStatus(found.project, found.env, data);
+  persist();
+  broadcastProjects();
+  res.status(200).json({ ok: true });
+});
+
+// Long-running service: log stray rejections instead of letting them crash it.
+process.on('unhandledRejection', err => console.error('[relay] unhandled rejection:', err));
+
 server.listen(PORT, () => {
   console.log(`Relay server on http://localhost:${PORT}`);
   console.log(`${keys.filter(k => !k.revoked).length} active API key(s) — manage them in Settings or server/data/api-keys.json`);
+  if (VM_ON) {
+    // Boot sweep: pick up envs left at `vms` (or mid-submit) by a restart.
+    // After this, submits are purely event-driven from the /status PATCH.
+    vmTick();
+    console.log(`[vmprov] ON → POST ${VM_AGENT_URL} when an env moves to 'vms'; callback ${VM_CALLBACK_URL}; advance to '${VM_NEXT_STAGE}' on Completed (max ${VM_MAX_CONCURRENT} concurrent)`);
+  } else {
+    const missing = [
+      !VM_AGENT_URL && 'RELAY_VM_AGENT_URL',
+      !VM_AGENT_TOKEN && 'RELAY_VM_AGENT_TOKEN',
+      !VM_CALLBACK_URL && 'RELAY_VM_CALLBACK_URL',
+    ].filter(Boolean).join(', ');
+    console.log(`[vmprov] OFF — set ${missing} to enable`);
+  }
 });

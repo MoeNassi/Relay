@@ -63,6 +63,9 @@ export function envRank(name: string): number {
   return i < 0 ? ENV_ORDER.length : i;
 }
 
+/** OS choices that map cleanly to VMProv `vm_type` (UBUNTU / WINDOWS-FR / WINDOWS-EN). */
+export const OS_OPTIONS = ['Ubuntu', 'Windows-FR', 'Windows-EN'] as const;
+
 export interface VmSpec {
   id: string;
   role: string; // e.g. "app server", "db"
