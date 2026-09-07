@@ -90,6 +90,29 @@ export interface HistoryEntry {
   kind?: 'status' | 'scan';
 }
 
+export type VmProvisionStatus = 'submitting' | 'submitted' | 'created' | 'failed' | 'error';
+
+/** Server-owned VMProv job bookkeeping for an environment's `vms` stage. */
+export interface VmProvision {
+  jobId?: string;
+  status?: VmProvisionStatus;
+  attempts?: number;
+  lastAttemptAt?: string;
+  lastReconcileAt?: string;
+  lastError?: string | null;
+  result?: {
+    total: number | null;
+    successful: number | null;
+    failed: number | null;
+    vms: Array<Record<string, unknown>>;
+  };
+  /**
+   * Cleartext initial credentials from the completion callback. Wire-only: the
+   * server overlays these on the broadcast and NEVER persists them to disk.
+   */
+  credentials?: Array<Record<string, unknown>>;
+}
+
 export interface Environment {
   id: string;
   name: string; // dev | rec | preprod | prod | custom
@@ -102,6 +125,8 @@ export interface Environment {
   history: HistoryEntry[];
   /** Per-type security scans tracked under the `scan` stage. */
   scans: ScanState;
+  /** VMProv provisioning state for the `vms` stage (absent until submitted). */
+  vmProvision?: VmProvision;
 }
 
 export interface FlowRule {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Project, Environment, StageKey, Team, ScanType } from '../types';
+import type { Project, Environment, StageKey, Team, ScanType, VmProvision, VmProvisionStatus } from '../types';
 import {
   TEAM_LABELS, stageDef, stageIndex,
   SCAN_TYPES, SCAN_LABELS, scanRequired, scansDone, scansSatisfied,
@@ -309,6 +309,8 @@ function EnvPanel({
         </div>
       )}
 
+      {env.vmProvision && <VmProvisionCard vp={env.vmProvision} />}
+
       <div className="detail-grid">
         <div className="card">
           <h2>VM specs<span className="hint">{env.name}</span></h2>
@@ -355,5 +357,78 @@ function EnvPanel({
         </div>
       </div>
     </>
+  );
+}
+
+/* ---------- VMProv provisioning + credentials ---------- */
+
+const PROV_LABELS: Record<VmProvisionStatus, string> = {
+  submitting: 'Submitting…',
+  submitted: 'Pending acceptance',
+  created: 'Created',
+  failed: 'Failed',
+  error: 'Error',
+};
+
+function copyText(t: string) {
+  navigator.clipboard?.writeText(t).catch(() => { /* clipboard blocked */ });
+}
+
+function VmProvisionCard({ vp }: { vp: VmProvision }) {
+  const creds = vp.credentials ?? [];
+  const status = vp.status;
+  return (
+    <div className="card prov-card">
+      <h2>VM provisioning<span className="hint">VMProv{vp.jobId ? ` · ${vp.jobId}` : ''}</span></h2>
+      <div className="prov-head">
+        <span className={`prov-badge prov-${status ?? 'unknown'}`}>
+          {status ? (PROV_LABELS[status] ?? status) : 'Unknown'}
+        </span>
+        {vp.result && (
+          <span className="prov-summary mono">
+            {vp.result.successful ?? '?'}/{vp.result.total ?? '?'} VM(s) created
+          </span>
+        )}
+        {vp.attempts ? <span className="sub">attempt {vp.attempts}</span> : null}
+      </div>
+      {vp.lastError && <div className="prov-error">{vp.lastError}</div>}
+
+      {creds.length > 0 ? (
+        <div className="prov-creds">
+          <div className="prov-creds-warn">
+            ⚠ Initial credentials — held in memory only, never stored. Copy them now; they vanish on server restart.
+          </div>
+          {creds.map((vm, i) => <CredBlock key={i} vm={vm} />)}
+        </div>
+      ) : status === 'created' ? (
+        <div className="empty">No credentials returned by VMProv.</div>
+      ) : null}
+    </div>
+  );
+}
+
+function CredBlock({ vm }: { vm: Record<string, unknown> }) {
+  const title = (vm.name as string) || (vm.hostname as string) || (vm.ip as string) || 'VM';
+  const entries = Object.entries(vm).filter(([, v]) => v != null);
+  return (
+    <div className="cred-block">
+      <div className="cred-title mono">{title}</div>
+      <table className="table">
+        <tbody>
+          {entries.map(([k, v]) => {
+            const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            return (
+              <tr key={k}>
+                <td className="cred-key">{k}</td>
+                <td className="cred-val mono">
+                  <span>{val}</span>
+                  <button className="btn sm" type="button" onClick={() => copyText(val)}>copy</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

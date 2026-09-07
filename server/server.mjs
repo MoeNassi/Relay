@@ -544,7 +544,26 @@ function broadcast(msg) {
 }
 
 const broadcastPresence = () => broadcast({ type: 'presence', users: presenceList() });
-const broadcastProjects = () => broadcast({ type: 'projects', projects });
+
+// Projects as sent to browsers: a shallow copy with in-memory VMProv credentials
+// overlaid onto the matching env's vmProvision. The persisted `projects` array
+// (what persist() writes) never carries credentials — this overlay is wire-only.
+function projectsForWire() {
+  if (!vmCredsById.size) return projects;
+  return projects.map(p => {
+    if (!p.environments?.some(e => vmCredsById.has(e.id))) return p;
+    return {
+      ...p,
+      environments: p.environments.map(e => {
+        const creds = vmCredsById.get(e.id);
+        return creds && e.vmProvision
+          ? { ...e, vmProvision: { ...e.vmProvision, credentials: creds } }
+          : e;
+      }),
+    };
+  });
+}
+const broadcastProjects = () => broadcast({ type: 'projects', projects: projectsForWire() });
 
 wss.on('connection', (ws, req) => {
   // When SSO is on, the live channel (which streams every project) is for
@@ -556,7 +575,7 @@ wss.on('connection', (ws, req) => {
   }
 
   clients.set(ws, { id: uid(), name: user?.name || 'Guest' });
-  ws.send(JSON.stringify({ type: 'projects', projects }));
+  ws.send(JSON.stringify({ type: 'projects', projects: projectsForWire() }));
   broadcastPresence();
 
   ws.on('message', raw => {
@@ -616,6 +635,12 @@ const VM_ON = Boolean(VM_AGENT_URL && VM_AGENT_TOKEN && VM_CALLBACK_URL);
 
 // envIds with a VMProv request (submit or reconcile) in flight right now.
 const vmInFlight = new Set();
+
+// Cleartext initial credentials from the completion callback, keyed by env.id.
+// IN-MEMORY ONLY: never written to projects.json (vmScrub keeps them out of the
+// persisted result) — merged into the outbound `projects` frame so the UI can
+// display them, and dropped when the server restarts.
+const vmCredsById = new Map();
 
 // Relay env name -> VMProv vm_environment code.
 const VM_ENV_CODE = {
@@ -738,6 +763,10 @@ function vmApplyStatus(project, env, data) {
     vms: Array.isArray(data?.vms) ? data.vms.map(vmScrub) : [],
   };
   if (status === 'Completed') {
+    // Keep the raw VM entries (they carry cleartext initial passwords / Windows
+    // user config) in memory only, keyed by env id — surfaced to the UI via
+    // projectsForWire(), never persisted to projects.json.
+    if (Array.isArray(data?.vms) && data.vms.length) vmCredsById.set(env.id, data.vms);
     if (env.stage === 'vms') {
       env.vmProvision.status = 'created';
       vmAdvance(env, VM_NEXT_STAGE, `VMProv job ${data.job_id} completed — ${data.successful ?? '?'} VM(s) created`);

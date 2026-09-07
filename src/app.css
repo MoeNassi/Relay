@@ -1079,3 +1079,38 @@
   .sidebar { display: none; }
   .page { padding: 24px; }
 }
+
+/* ---------- VMProv provisioning + credentials ---------- */
+.prov-card { margin-bottom: 20px; }
+.prov-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.prov-badge {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--r-bg-hover); color: var(--r-text-secondary);
+}
+.prov-submitting { background: var(--r-brand-soft); color: var(--r-brand); }
+.prov-submitted  { background: var(--r-amber-soft); color: var(--r-amber); }
+.prov-created    { background: var(--r-green-soft); color: var(--r-green); }
+.prov-failed,
+.prov-error      { background: var(--r-red-soft); color: var(--r-red); }
+.prov-summary { font-size: 13px; color: var(--r-text-secondary); }
+.prov-error {
+  margin: 6px 0 2px; padding: 8px 10px; border-radius: var(--r-radius);
+  background: var(--r-red-soft); color: var(--r-red); font-size: 13px;
+}
+.prov-creds { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.prov-creds-warn {
+  padding: 8px 10px; border-radius: var(--r-radius);
+  background: var(--r-amber-soft); color: var(--r-amber);
+  font-size: 12.5px; font-weight: 500;
+}
+.cred-block { border: 1px solid var(--r-border); border-radius: var(--r-radius); overflow: hidden; }
+.cred-title {
+  padding: 7px 12px; background: var(--r-bg-secondary);
+  border-bottom: 1px solid var(--r-border); font-size: 13px; font-weight: 600;
+}
+.cred-key { width: 34%; color: var(--r-text-secondary); font-size: 13px; white-space: nowrap; }
+.cred-val { font-size: 13px; }
+.cred-val { display: table-cell; }
+.cred-val span { user-select: all; word-break: break-all; }
+.cred-val .btn.sm { margin-left: 8px; vertical-align: middle; }

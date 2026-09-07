@@ -31,6 +31,15 @@ services:
       RELAY_SSO_REDIRECT_URI: ${RELAY_SSO_REDIRECT_URI:-}
       RELAY_SSO_ALLOWED_DOMAIN: ${RELAY_SSO_ALLOWED_DOMAIN:-um6p.ma}
       RELAY_SSO_SECURE: ${RELAY_SSO_SECURE:-1}
+      # --- VMProv auto-provisioning (worker turns ON only when AGENT_TOKEN and
+      # CALLBACK_URL are both set; otherwise it stays off) ---
+      RELAY_VM_AGENT_URL: ${RELAY_VM_AGENT_URL:-https://vmprov.um6p.ma/api/agent/jobs}
+      RELAY_VM_AGENT_TOKEN: ${RELAY_VM_AGENT_TOKEN:-}
+      RELAY_VM_CALLBACK_URL: ${RELAY_VM_CALLBACK_URL:-}
+      RELAY_VM_CALLBACK_TOKEN: ${RELAY_VM_CALLBACK_TOKEN:-}
+      RELAY_VM_SITE: ${RELAY_VM_SITE:-}
+      RELAY_VM_REQUESTER: ${RELAY_VM_REQUESTER:-}
+      RELAY_VM_NEXT_STAGE: ${RELAY_VM_NEXT_STAGE:-}
     volumes:
       # persist projects.json + api-keys.json across restarts/rebuilds
       - relay-data:/app/server/data
