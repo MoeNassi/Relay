@@ -41,10 +41,13 @@ services:
       RELAY_VM_REQUESTER: ${RELAY_VM_REQUESTER:-}
       RELAY_VM_NEXT_STAGE: ${RELAY_VM_NEXT_STAGE:-}
       # VMProv (and any other internal endpoint) serves a self-signed cert.
-      # Point Node at the extra CA/cert to trust so fetch() stops rejecting it,
-      # e.g. NODE_EXTRA_CA_CERTS=/app/certs/vmprov.crt with the cert dropped in
-      # ./certs on the host. Leave empty to keep default CA trust only.
+      # Two ways to get past it:
+      #  - Secure: point Node at the cert to trust,
+      #      NODE_EXTRA_CA_CERTS=/app/certs/vmprov.crt (drop it in ./certs).
+      #  - Quick (internal/test hosts only): NODE_TLS_REJECT_UNAUTHORIZED=0
+      #      disables ALL outbound TLS verification for the process.
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
+      NODE_TLS_REJECT_UNAUTHORIZED: ${NODE_TLS_REJECT_UNAUTHORIZED:-}
     volumes:
       # persist projects.json + api-keys.json across restarts/rebuilds
       - relay-data:/app/server/data
