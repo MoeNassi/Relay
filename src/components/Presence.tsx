@@ -21,9 +21,19 @@ export function Presence({ users, connected }: { users: PresenceUser[]; connecte
   return (
     <div className="presence" title={users.map(u => u.name).join(', ')}>
       {shown.map(u => (
-        <span key={u.id} className="presence-avatar" style={{ background: colorFor(u.name) }}>
-          {initials(u.name)}
-        </span>
+        u.picture ? (
+          <img
+            key={u.id}
+            className="presence-avatar presence-photo"
+            src={u.picture}
+            alt={u.name}
+            title={u.name}
+          />
+        ) : (
+          <span key={u.id} className="presence-avatar" style={{ background: colorFor(u.name) }}>
+            {initials(u.name)}
+          </span>
+        )
       ))}
       {extra > 0 && <span className="presence-avatar more">+{extra}</span>}
     </div>

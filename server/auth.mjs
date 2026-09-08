@@ -21,7 +21,9 @@ const CLIENT_SECRET  = process.env.RELAY_SSO_CLIENT_SECRET || '';
 const REDIRECT_URI   = process.env.RELAY_SSO_REDIRECT_URI || '';
 const ALLOWED_DOMAIN = (process.env.RELAY_SSO_ALLOWED_DOMAIN || '').trim().toLowerCase();
 const SECURE         = process.env.RELAY_SSO_SECURE === '1';
-const SCOPE          = 'openid profile email';
+// User.Read lets us pull the signed-in user's Graph profile photo after login.
+const SCOPE          = 'openid profile email User.Read';
+const PHOTO_MAX      = 512 * 1024; // don't inline photos larger than 512 KB
 // Kill-switch: RELAY_SSO_DISABLED=1 forces SSO off even when the four SSO vars
 // are present (e.g. injected by the deploy environment). Lets dev deployments
 // run open without stripping credentials from the host.
@@ -161,10 +163,27 @@ export function installAuthRoutes(app, { devFallback = false, devUser = null } =
         return res.status(403).send(`Access restricted to @${ALLOWED_DOMAIN} accounts.`);
       }
 
+      // Best-effort: pull the user's Graph profile photo as a data URL. Never
+      // let a missing/oversized photo (or a Graph hiccup) block sign-in.
+      let picture = null;
+      try {
+        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        if (photoRes.ok) {
+          const buf = Buffer.from(await photoRes.arrayBuffer());
+          if (buf.length && buf.length <= PHOTO_MAX) {
+            const ct = photoRes.headers.get('content-type') || 'image/jpeg';
+            picture = `data:${ct};base64,${buf.toString('base64')}`;
+          }
+        }
+      } catch { /* no photo — fall back to initials in the UI */ }
+
       const user = {
         name: claims.name || email || 'User',
         email,
         oid: claims.oid || claims.sub || null,
+        picture,
       };
       const sid = b64url(crypto.randomBytes(24));
       sessions.set(sid, { user, createdAt: Date.now() });

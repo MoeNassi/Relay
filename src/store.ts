@@ -47,7 +47,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 }
 
 /* ---------- auth ---------- */
-export interface AuthUser { name: string; email: string; oid: string | null }
+export interface AuthUser { name: string; email: string; oid: string | null; picture?: string | null }
 export interface AuthState { user: AuthUser; mode: 'sso' | 'dev' }
 
 /** Resolve the current session. Returns null if not authenticated. */
@@ -104,6 +104,7 @@ export const apiRevokeKey = (id: string) => call<void>('DELETE', `/api/keys/${id
 export interface PresenceUser {
   id: string;
   name: string;
+  picture?: string | null;
 }
 
 interface RelayEvents {

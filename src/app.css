@@ -253,6 +253,10 @@
   user-select: none;
 }
 .presence-avatar:first-child { margin-left: 0; }
+.presence-photo {
+  object-fit: cover;
+  background: var(--r-bg-secondary);
+}
 .presence-avatar.more {
   background: var(--r-bg-hover);
   color: var(--r-text-secondary);

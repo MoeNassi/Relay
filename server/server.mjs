@@ -574,7 +574,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  clients.set(ws, { id: uid(), name: user?.name || 'Guest' });
+  clients.set(ws, { id: uid(), name: user?.name || 'Guest', picture: user?.picture || null });
   ws.send(JSON.stringify({ type: 'projects', projects: projectsForWire() }));
   broadcastPresence();
 
